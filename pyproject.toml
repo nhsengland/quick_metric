@@ -1,0 +1,48 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "quick_metric"
+version = "0.0.1"
+description = "A framework for quickly creating metrics using easy to edit YAML configs and reusable methods to Filter, Calculate, and Transform data."
+authors = [
+  { name = "Joseph Wilson", email = "joseph.wilson8@nhs.net" },
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License"
+]
+dependencies = [
+    "pandas>=2.0.0",
+    "pyyaml>=6.0.0",
+    "numpy>=1.24.0",
+]
+requires-python = ">=3.8"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.0.0",
+]
+
+[tool.ruff]
+line-length = 79
+src = ["quick_metric"]
+include = ["pyproject.toml", "quick_metric/**/*.py"]
+
+[tool.ruff.lint]
+extend-select = ["I"]  # Add import sorting
+
+[tool.ruff.lint.isort]
+known-first-party = ["quick_metric"]
+force-sort-within-sections = true

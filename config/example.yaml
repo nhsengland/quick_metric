@@ -1,0 +1,121 @@
+# Example configuration for Quick Metric
+# This demonstrates the package capabilities with generic business examples
+
+# YAML anchors for reusability
+common_filters: &active_records
+  status: Active
+  not:
+    archived: true
+
+basic_metrics: &basic_metrics
+  - count_records
+  - mean_value
+  - sum_values
+
+analysis_metrics: &analysis_metrics
+  - count_records
+  - describe_data
+
+metric_instructions:
+  
+  # Simple equality filtering
+  sales_overview:
+    method: *basic_metrics
+    filter:
+      department: Sales
+      
+  # List membership filtering  
+  priority_departments:
+    method: *basic_metrics
+    filter:
+      department: [Sales, Marketing, Engineering]
+      
+  # Logical AND conditions with anchor usage
+  active_high_value_customers:
+    method: 
+      - count_records
+      - mean_value
+    filter:
+      and:
+        <<: *active_records
+        customer_type: Premium
+        value:
+          greater than: 1000
+          
+  # Complex nested filtering with OR conditions
+  recent_activity:
+    method: *analysis_metrics
+    filter:
+      and:
+        <<: *active_records
+        or:
+          priority: High
+          last_updated:
+            greater than: '2024-01-01'
+            
+  # Age-based segmentation
+  age_demographics:
+    method:
+      - count_records
+      - mean_value
+    filter:
+      and:
+        age:
+          greater than equal: 18
+        age:
+          less than equal: 65
+        status: Active
+        
+  # Geographic filtering with set operations
+  uk_customers:
+    method: *basic_metrics
+    filter:
+      and:
+        country: 
+          in: [UK, United Kingdom, GB]
+        region:
+          not in: [Test, Demo]
+          
+  # Exclusion-based filtering
+  valid_orders:
+    method:
+      - count_records
+      - sum_values
+    filter:
+      and:
+        not:
+          status: [Cancelled, Refunded, Test]
+        order_date:
+          greater than: '2023-01-01'
+        amount:
+          greater than: 0
+          
+  # Complex business logic with multiple conditions
+  quarterly_performance:
+    method:
+      - count_records
+      - mean_value
+      - sum_values
+    filter:
+      and:
+        quarter: Q3
+        year: 2024
+        account_status: Active
+        or:
+          account_value:
+            greater than: 50000
+          transaction_count:
+            greater than: 100
+        not:
+          account_type: [Test, Demo, Internal]
+          
+  # Simple data quality check
+  complete_profiles:
+    method: *basic_metrics
+    filter:
+      and:
+        profile_complete: true
+        email:
+          not: null
+        phone:
+          not: null
