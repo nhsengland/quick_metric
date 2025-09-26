@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      
+    - name: Install Python versions
+      run: |
+        uv python install 3.10 3.11 3.12
+        
+    - name: Install tox with tox-uv
+      run: uv tool install tox tox-uv
+      
+    - name: Run all tests and checks
+      run: tox
+      
+    - name: Upload coverage
+      uses: codecov/codecov-action@v4
+      if: always()
+      with:
+        file: ./coverage.xml
