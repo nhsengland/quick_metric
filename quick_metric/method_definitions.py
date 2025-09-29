@@ -1,11 +1,11 @@
 """
-This module contains methods for calculating metrics and the decorator
-to register new methods.
+This module contains the decorator to register metric methods.
+
+The decorator allows users to register their own custom metric methods
+that can be used with the quick_metric framework.
 """
 
 from typing import Callable
-
-import pandas as pd
 
 METRICS_METHODS = {}
 
@@ -31,32 +31,3 @@ def metric_method(func: Callable) -> Callable:
     """
     METRICS_METHODS[func.__name__] = func
     return func
-
-
-# Example metric methods that can be used as templates
-@metric_method
-def count_records(data: pd.DataFrame) -> int:
-    """Count the number of records in the data."""
-    return len(data)
-
-
-@metric_method
-def mean_value(data: pd.DataFrame, column: str = "value") -> float:
-    """Calculate the mean of a specified column."""
-    if column in data.columns:
-        return data[column].mean()
-    return 0.0
-
-
-@metric_method
-def sum_values(data: pd.DataFrame, column: str = "value") -> float:
-    """Calculate the sum of a specified column."""
-    if column in data.columns:
-        return data[column].sum()
-    return 0.0
-
-
-@metric_method
-def describe_data(data: pd.DataFrame) -> pd.DataFrame:
-    """Return descriptive statistics for the data."""
-    return data.describe()
