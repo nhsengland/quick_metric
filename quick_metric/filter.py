@@ -70,6 +70,7 @@ apply_methods : Module that processes filtered data
 from typing import Any, Dict, Union
 
 import pandas as pd
+from loguru import logger
 
 
 def evaluate_condition(
@@ -158,6 +159,10 @@ def recursive_filter(data_df: pd.DataFrame, filters: Dict) -> pd.Series:
     Each condition is a key-value pair where the key is the column name and the value is the
     condition to apply to that column.
     """
+    # Handle empty filters - return all rows as True
+    if not filters:
+        return pd.Series(index=data_df.index, data=True, dtype=bool)
+    
     if "and" in filters:
         mask = pd.Series(index=data_df.index, data=True, dtype=bool)
         for key, value in filters["and"].items():
@@ -212,5 +217,14 @@ def apply_filter(data_df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
     pd.DataFrame
         Filtered DataFrame.
     """
+    logger.trace(f"Applying filters to DataFrame with {len(data_df)} rows")
+    
+    if not filters:
+        logger.trace("No filters specified, returning original DataFrame")
+        return data_df
+        
     mask = recursive_filter(data_df, filters)
-    return data_df.loc[mask]  # type: ignore[return-value]
+    filtered_df = data_df.loc[mask]  # type: ignore[return-value]
+    
+    logger.trace(f"Filter applied: {len(filtered_df)} rows remaining")
+    return filtered_df

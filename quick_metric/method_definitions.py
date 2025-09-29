@@ -35,10 +35,12 @@ True
 See Also
 --------
 apply_methods : Module that uses the registered methods
-interpret_instructions : Main workflow that orchestrates method execution
+core : Main workflow that orchestrates method execution
 """
 
 from typing import Callable
+
+from loguru import logger
 
 METRICS_METHODS = {}
 
@@ -62,5 +64,7 @@ def metric_method(func: Callable) -> Callable:
     ------------
     Registers the function in the METRICS_METHODS dictionary.
     """
+    logger.trace(f"Registering metric method: {func.__name__}")
     METRICS_METHODS[func.__name__] = func
+    logger.success(f"Metric method '{func.__name__}' registered successfully")
     return func

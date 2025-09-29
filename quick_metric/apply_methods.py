@@ -58,6 +58,7 @@ filter : Module for data filtering before method application
 from typing import Any, Callable, Dict, List, Optional
 
 import pandas as pd
+from loguru import logger
 
 from quick_metric.method_definitions import METRICS_METHODS
 
@@ -99,14 +100,23 @@ def apply_method(
     if not metrics_methods:
         metrics_methods = METRICS_METHODS
 
+    logger.trace(f"Applying method '{method_name}' to {len(data)} rows")
+
     try:
         method = metrics_methods[method_name]
     except KeyError as e:
+        logger.error(f"Method '{method_name}' not found in available methods")
         raise MetricsMethodNotFoundError(
             f"Method {method_name} not found in {list(metrics_methods.keys())}"
         ) from e
 
-    return method(data)
+    try:
+        result = method(data)
+        logger.success(f"Method '{method_name}' completed successfully")
+        return result
+    except Exception as e:
+        logger.critical(f"Error applying method '{method_name}': {e}")
+        raise
 
 
 def apply_methods(
@@ -140,8 +150,11 @@ def apply_methods(
     if not metrics_methods:
         metrics_methods = METRICS_METHODS
 
+    logger.debug(f"Applying {len(method_names)} methods: {method_names}")
+
     results = {}
     for method_name in method_names:
         results[method_name] = apply_method(data, method_name, metrics_methods)
 
+    logger.success(f"Successfully applied all {len(method_names)} methods")
     return results
