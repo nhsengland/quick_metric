@@ -1,0 +1,106 @@
+site_name: Quick Metric
+site_description: NHS England - Data Science Framework for Custom Analytical Methods
+site_author: NHS England - Data Science and Applied AI Team
+site_url: https://nhsengland.github.io/quick_metric
+repo_url: https://github.com/nhsengland/quick_metric
+repo_name: quick_metric
+edit_uri: edit/main/docs/content/
+docs_dir: docs/content
+
+theme:
+  name: material
+  language: en
+  custom_dir: docs/overrides
+  palette:
+    scheme: default
+    primary: indigo
+  font:
+    text: Roboto
+  logo: images/logo/nhs-blue-on-white.jpg
+  favicon: images/favicon/favicon.ico
+  features:
+    - search.share
+    - content.code.annotate
+    - content.code.copy
+    - content.tabs.link
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.indexes
+    - navigation.path
+    - navigation.top
+    - toc.integrate
+  icon:
+    admonition:
+      <type>: material/alert
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: numpy
+            members_order: source
+            show_source: true
+            show_bases: true
+            extra:
+              show_inheritance: true
+
+nav:
+  - Home: index.md
+  - Getting Started: getting_started.md
+  - API Reference: 
+    - api_reference/index.md
+    - Method Definitions: api_reference/method_definitions.md
+    - Apply Methods: api_reference/apply_methods.md
+    - Filter: api_reference/filter.md
+    - Interpret Instructions: api_reference/interpret_instructions.md
+
+extra_css:
+  - stylesheets/nhs_style.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/nhsengland/quick_metric
+    - icon: fontawesome/solid/envelope
+      link: mailto:datascience@nhs.net
+  generator: false
+
+copyright: Copyright &copy; 2025 Crown Copyright (NHS England)
+
+markdown_extensions:
+  - tables
+  - attr_list
+  - pymdownx.emoji
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+      clickable_checkbox: true
+  - admonition
+  - pymdownx.details
+  - pymdownx.mark
+  - md_in_html
+  - footnotes
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.critic
+  - pymdownx.caret
+  - pymdownx.keys
+  - pymdownx.tilde
+
+extra_javascript:
+  - javascripts/mermaid.mjs
+
+watch:
+  - docs/overrides

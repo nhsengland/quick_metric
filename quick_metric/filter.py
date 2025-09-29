@@ -1,6 +1,70 @@
 """
-This module contains functions to filter DataFrames based on conditions specified in a dictionary.
-The dictionary can contain multiple conditions and combine them using logical operators.
+Data filtering functionality for Quick Metric.
+
+This module provides comprehensive data filtering capabilities for pandas
+DataFrames using dictionary-based filter specifications. It supports
+complex logical operations including AND, OR, NOT conditions, as well
+as various comparison operators and membership tests.
+
+The filtering system is designed to work with nested filter conditions
+specified in YAML configurations, allowing for sophisticated data
+subset selection before applying metric methods.
+
+Functions
+---------
+evaluate_condition : Evaluate a single filter condition
+recursive_filter : Handle complex nested filter conditions
+apply_filter : Main entry point for applying filters to DataFrames
+
+Supported Operators
+-------------------
+- Equality: `{'column': 'value'}`
+- Membership: `{'column': ['value1', 'value2']}`
+- Comparisons: `{'column': {'greater than': 10}}`
+- Logical: `{'and': {...}}`, `{'or': {...}}`, `{'not': {...}}`
+- Set operations: `{'column': {'in': [...]}}`
+
+Examples
+--------
+Simple equality filter:
+
+>>> import pandas as pd
+>>> from quick_metric.filter import apply_filter
+>>>
+>>> data = pd.DataFrame({
+...     'category': ['A', 'B', 'A', 'C'],
+...     'value': [10, 20, 30, 40]
+... })
+>>> filter_spec = {'category': 'A'}
+>>> filtered_data = apply_filter(data, filter_spec)
+>>> print(len(filtered_data))
+2
+
+Complex nested filter:
+
+>>> filter_spec = {
+...     'and': {
+...         'category': ['A', 'B'],
+...         'value': {'greater than': 15}
+...     }
+... }
+>>> filtered_data = apply_filter(data, filter_spec)
+>>> print(len(filtered_data))
+2
+
+Negation filter:
+
+>>> filter_spec = {
+...     'not': {'category': 'C'}
+... }
+>>> filtered_data = apply_filter(data, filter_spec)
+>>> print(len(filtered_data))
+3
+
+See Also
+--------
+interpret_instructions : Module that uses filtering before applying methods
+apply_methods : Module that processes filtered data
 """
 
 from typing import Any, Dict, Union

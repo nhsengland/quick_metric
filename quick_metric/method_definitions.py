@@ -1,8 +1,41 @@
 """
-This module contains the decorator to register metric methods.
+Method registration and decorator functionality for Quick Metric.
 
-The decorator allows users to register their own custom metric methods
-that can be used with the quick_metric framework.
+This module provides the core decorator for registering custom metric methods
+that can be used with the quick_metric framework. Methods decorated with
+@metric_method are automatically registered in the global METRICS_METHODS
+registry and become available for use in YAML configurations.
+
+The module maintains a global registry of all registered metric methods,
+allowing the framework to dynamically discover and execute user-defined
+metric functions.
+
+Attributes
+----------
+METRICS_METHODS : dict
+    Global registry mapping method names to their corresponding functions.
+    Automatically populated when functions are decorated with @metric_method.
+
+Examples
+--------
+Register a custom metric method:
+
+>>> from quick_metric.method_definitions import metric_method
+>>> import pandas as pd
+>>>
+>>> @metric_method
+... def calculate_average(data, column='value'):
+...     '''Calculate the average of a specified column.'''
+...     return data[column].mean() if column in data.columns else 0.0
+>>>
+>>> # Method is now available in METRICS_METHODS
+>>> print('calculate_average' in METRICS_METHODS)
+True
+
+See Also
+--------
+apply_methods : Module that uses the registered methods
+interpret_instructions : Main workflow that orchestrates method execution
 """
 
 from typing import Callable

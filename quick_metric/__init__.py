@@ -2,7 +2,41 @@
 Quick Metric: A framework for quickly creating metrics using YAML configs.
 
 This package provides a simple way to apply filters and methods to pandas
-DataFrames based on YAML configuration files.
+DataFrames based on YAML configuration files. It allows users to define
+custom metric methods and configure complex data filtering through
+declarative YAML configurations.
+
+The main workflow involves:
+1. Define custom metric methods using the @metric_method decorator
+2. Create YAML configurations specifying filters and methods to apply
+3. Apply the configuration to pandas DataFrames to generate metrics
+
+Examples
+--------
+Basic usage with custom methods:
+
+>>> import pandas as pd
+>>> from quick_metric import metric_method, interpret_metric_instructions
+>>>
+>>> @metric_method
+... def count_records(data):
+...     return len(data)
+>>>
+>>> data = pd.DataFrame({'category': ['A', 'B', 'A'], 'value': [1, 2, 3]})
+>>> config = {
+...     'category_a_count': {
+...         'method': ['count_records'],
+...         'filter': {'category': 'A'}
+...     }
+... }
+>>> results = interpret_metric_instructions(data, config)
+
+See Also
+--------
+method_definitions : Core decorator for registering metric methods
+filter : Data filtering functionality
+apply_methods : Method application logic
+interpret_instructions : Main orchestration functions
 """
 
 from quick_metric.apply_methods import apply_method, apply_methods

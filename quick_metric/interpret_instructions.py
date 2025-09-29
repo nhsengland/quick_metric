@@ -1,3 +1,82 @@
+"""
+Main orchestration and workflow functionality for Quick Metric.
+
+This module provides the primary entry points for the quick_metric framework,
+handling the complete workflow from YAML configuration reading to metric
+result generation. It coordinates between the filtering, method application,
+and configuration parsing components.
+
+The module serves as the main interface for users, providing high-level
+functions that abstract away the complexity of the underlying filtering
+and method application processes.
+
+Functions
+---------
+read_metric_instructions : Load metric configurations from YAML files
+interpret_metric_instructions : Execute complete metric workflow on data
+
+Workflow
+--------
+1. Load YAML configuration specifying metrics, filters, and methods
+2. For each metric specification:
+   - Apply filters to subset the input DataFrame
+   - Execute specified methods on the filtered data
+   - Collect results in a structured dictionary
+3. Return comprehensive results for all metrics
+
+Examples
+--------
+Load configuration from YAML file:
+
+>>> from pathlib import Path
+>>> from quick_metric.interpret_instructions import read_metric_instructions
+>>>
+>>> config_path = Path('metrics.yaml')
+>>> instructions = read_metric_instructions(config_path)
+
+Execute complete workflow:
+
+>>> import pandas as pd
+>>> from quick_metric.interpret_instructions import (
+...     interpret_metric_instructions
+... )
+>>> from quick_metric.method_definitions import metric_method
+>>>
+>>> @metric_method
+... def count_records(data):
+...     return len(data)
+>>>
+>>> data = pd.DataFrame({'category': ['A', 'B', 'A'], 'value': [1, 2, 3]})
+>>> config = {
+...     'category_metrics': {
+...         'method': ['count_records'],
+...         'filter': {'category': 'A'}
+...     }
+... }
+>>> results = interpret_metric_instructions(data, config)
+>>> print(results['category_metrics']['count_records'])
+2
+
+YAML Configuration Format
+--------------------------
+```yaml
+metric_instructions:
+  metric_name:
+    method: ['method1', 'method2']
+    filter:
+      column_name: value
+      and:
+        condition1: value1
+        condition2: value2
+```
+
+See Also
+--------
+filter : Data filtering functionality used by this module
+apply_methods : Method execution functionality used by this module
+method_definitions : Method registration system used by this module
+"""
+
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -58,9 +137,7 @@ def interpret_metric_instructions(
 
     for metric_name, metric_instruction in metric_instructions.items():
         # Apply filter to data
-        filtered_data = apply_filter(
-            data_df=data, filters=metric_instruction["filter"]
-        )
+        filtered_data = apply_filter(data_df=data, filters=metric_instruction["filter"])
 
         # Apply methods to filtered data
         results[metric_name] = apply_methods(
