@@ -29,6 +29,10 @@ uv pip install -e .
 uv pip install -e ".[dev]"
 ```
 
+### Dependencies
+
+Quick Metric includes support for pipeline integration with `oops-its-a-pipeline`. This dependency is automatically installed and enables advanced workflow capabilities. If you only need standalone metric processing, all pipeline functionality is optional.
+
 ## Quick Start
 
 ### 1. Define Custom Metric Methods
@@ -68,10 +72,14 @@ metric_instructions:
 
 ### 3. Apply Metrics to Your Data
 
+Quick Metric provides two main entry points for processing your data:
+
+#### Modern API - generate_metrics() (Recommended)
+
 ```python
 import pandas as pd
 from pathlib import Path
-from quick_metric import read_metric_instructions, interpret_metric_instructions
+from quick_metric import generate_metrics
 
 # Load your data
 data = pd.DataFrame({
@@ -81,16 +89,91 @@ data = pd.DataFrame({
     'value': [10, 20, 30, 40]
 })
 
-# Load configuration
+# Option 1: Use dictionary configuration
+config = {
+    'cancer_metrics': {
+        'method': ['count_records', 'mean_value'],
+        'filter': {
+            'and': {
+                'disease_type': 'Cancer',
+                'status': 'Active',
+                'not': {'remove': 'Remove'}
+            }
+        }
+    }
+}
+
+results = generate_metrics(data, config)
+
+# Option 2: Use YAML file
+config_path = Path('config/metrics.yaml')
+results = generate_metrics(data, config_path)
+```
+
+#### Legacy API - interpret_metric_instructions()
+
+```python
+from quick_metric import read_metric_instructions, interpret_metric_instructions
+
+# Load configuration from YAML
 config_path = Path('config/metrics.yaml')
 instructions = read_metric_instructions(config_path)
 
 # Apply metrics
 results = interpret_metric_instructions(data, instructions)
+```
 
+Both approaches produce the same results:
+
+```python
 # Access results
 print(results['cancer_metrics']['count_records'])  # Number of matching records
 print(results['cancer_metrics']['mean_value'])     # Mean of 'value' column
+```
+
+### 4. Pipeline Integration (New!)
+
+Quick Metric now integrates seamlessly with `oops-its-a-pipeline` for complex data processing workflows:
+
+```python
+from oops_its_a_pipeline import Pipeline, PipelineConfig
+from quick_metric.pipeline import create_metrics_stage
+import pandas as pd
+
+class MetricsConfig(PipelineConfig):
+    model_config = {'arbitrary_types_allowed': True}
+    
+    data: pd.DataFrame = pd.DataFrame({
+        'category': ['A', 'B', 'A'], 'value': [10, 20, 30]
+    })
+    config: dict = {
+        'summary_metrics': {
+            'method': ['count_records', 'mean_value'],
+            'filter': {}
+        }
+    }
+
+# Create and run pipeline
+pipeline = Pipeline(MetricsConfig())
+pipeline.add_stage(create_metrics_stage())
+results = pipeline.run("metrics_analysis")
+
+print(results['metrics'])
+```
+
+#### Advanced Pipeline Usage
+
+```python
+# Multi-stage pipeline with data processing
+pipeline = (Pipeline(config)
+    .add_function_stage(load_data, outputs="raw_data")
+    .add_function_stage(clean_data, inputs="raw_data", outputs="clean_data")
+    .add_stage(create_metrics_stage(
+        data_input="clean_data",
+        config_input="metrics_config",
+        metrics_output="business_metrics"
+    ))
+    .add_function_stage(save_results, inputs="business_metrics"))
 ```
 
 ## Configuration Format
@@ -184,6 +267,146 @@ def percentage_active(data):
         return 0.0
     active_count = len(data[data['status'] == 'Active'])
     return (active_count / len(data)) * 100
+```
+
+## Pipeline Integration
+
+Quick Metric integrates with `oops-its-a-pipeline` to support complex data processing workflows. This allows you to embed metrics generation within larger data pipelines.
+
+### Pipeline Components
+
+#### GenerateMetricsStage
+
+The main pipeline stage that wraps the Quick Metric functionality:
+
+```python
+from quick_metric.pipeline import GenerateMetricsStage
+
+stage = GenerateMetricsStage(
+    data_input="processed_data",      # Input DataFrame variable name
+    config_input="metrics_config",    # Configuration variable name  
+    metrics_output="calculated_metrics", # Output variable name
+    name="business_metrics"           # Stage name for logging
+)
+```
+
+#### create_metrics_stage()
+
+A convenience factory function for creating metrics stages:
+
+```python
+from quick_metric.pipeline import create_metrics_stage
+
+# Basic usage
+stage = create_metrics_stage()
+
+# With custom parameters
+stage = create_metrics_stage(
+    data_input="clean_data",
+    config_input="analysis_config",
+    metrics_output="business_kpis"
+)
+```
+
+### Pipeline Examples
+
+#### Basic Pipeline
+
+```python
+from oops_its_a_pipeline import Pipeline, PipelineConfig
+from quick_metric.pipeline import create_metrics_stage
+
+class Config(PipelineConfig):
+    model_config = {'arbitrary_types_allowed': True}
+    data = your_dataframe
+    config = your_metrics_config
+
+pipeline = Pipeline(Config()).add_stage(create_metrics_stage())
+results = pipeline.run("analysis")
+```
+
+#### Multi-Stage Pipeline
+
+```python
+def load_data():
+    return pd.read_csv("data.csv")
+
+def prepare_config():
+    return {
+        'performance_metrics': {
+            'method': ['count_records', 'mean_value'],
+            'filter': {'status': 'active'}
+        }
+    }
+
+def save_results(metrics):
+    # Save metrics to database or file
+    pass
+
+# Chain multiple stages
+pipeline = (Pipeline()
+    .add_function_stage(load_data, outputs="data")
+    .add_function_stage(prepare_config, outputs="config")
+    .add_stage(create_metrics_stage())
+    .add_function_stage(save_results, inputs="metrics"))
+
+results = pipeline.run("full_analysis")
+```
+
+#### Custom Methods in Pipelines
+
+```python
+# Define custom methods that will be available in the pipeline
+@metric_method
+def efficiency_score(data):
+    return data['completed'].sum() / len(data) * 100
+
+# Use in pipeline with custom methods context
+pipeline = (Pipeline(config)
+    .add_stage(create_metrics_stage(
+        metrics_methods_input="custom_methods"  # Reference custom methods
+    )))
+```
+
+### Pipeline Configuration Formats
+
+The pipeline stage accepts configurations in multiple formats:
+
+1. **Dictionary configuration**:
+
+```python
+config = {
+    'metric_name': {
+        'method': ['count_records'],
+        'filter': {'column': 'value'}
+    }
+}
+```
+
+2. **YAML file path**:
+
+```python
+from pathlib import Path
+config = Path('metrics.yaml')
+```
+
+3. **PipelineConfig object**:
+
+```python
+class MetricsConfig(PipelineConfig):
+    config: dict = your_config_dict
+```
+
+### Error Handling in Pipelines
+
+Pipeline stages automatically wrap errors in `PipelineStageValidationError` with detailed context:
+
+```python
+try:
+    results = pipeline.run("analysis")
+except PipelineStageValidationError as e:
+    print(f"Pipeline failed: {e}")
+    # Error includes stage name and detailed error context
 ```
 
 ## Development
@@ -282,19 +505,30 @@ Common issues and solutions:
 
 ## Architecture
 
-The package consists of four main modules:
+The package consists of five main modules:
 
 1. **`filter.py`**: Handles complex data filtering based on YAML conditions
 2. **`method_definitions.py`**: Contains the decorator and method registry
 3. **`apply_methods.py`**: Applies registered methods to filtered data
-4. **`interpret_instructions.py`**: Orchestrates the entire process
+4. **`core.py`**: Main orchestration functions (generate_metrics, interpret_metric_instructions)
+5. **`pipeline.py`**: Pipeline integration for oops-its-a-pipeline workflows
 
 ### Data Flow
+
+#### Standalone Usage
 
 ```text
 YAML Config → Parse Instructions → Apply Filters → Execute Methods → Return Results
      ↓              ↓                   ↓              ↓              ↓
 [metrics.yaml] → [dict] → [filtered DataFrame] → [method results] → [nested dict]
+```
+
+#### Pipeline Usage
+
+```text
+Pipeline Context → GenerateMetricsStage → Core Processing → Context Update
+      ↓                    ↓                    ↓               ↓
+[data, config] → [generate_metrics] → [filter + methods] → [context['metrics']]
 ```
 
 ## Contributing
@@ -317,26 +551,29 @@ YAML Config → Parse Instructions → Apply Filters → Execute Methods → Ret
 │   └── example.yaml            <- Example YAML configuration
 ├── docs/                       <- MkDocs documentation
 │   ├── mkdocs.yml
-│   └── docs/
+│   └── content/
 │       ├── index.md
-│       └── getting-started.md
+│       ├── getting_started.md
+│       └── api_reference/
 ├── quick_metric/               <- Source code for the package
 │   ├── __init__.py             <- Makes quick_metric a Python module
 │   ├── apply_methods.py        <- Method application logic
 │   ├── filter.py              <- Data filtering functionality
-│   ├── interpret_instructions.py <- Main orchestration module
-│   └── method_definitions.py   <- Method decorator and registry
+│   ├── method_definitions.py   <- Method decorator and registry
+│   └── pipeline.py             <- Pipeline integration with oops-its-a-pipeline
 └── tests/                      <- Test suite
     ├── __init__.py
-    ├── test_data.py            <- Test fixtures and sample data
+    ├── conftest.py             <- Pytest configuration and fixtures
     ├── e2e/                    <- End-to-end integration tests
     │   ├── __init__.py
     │   └── test_workflows.py
     └── unit/                   <- Unit tests
         ├── __init__.py
         ├── test_apply_methods.py
+        ├── test_core.py
         ├── test_filter_conditions.py
         ├── test_method_definitions.py
+        ├── test_pipeline.py
         └── test_recursive_filter.py
 ```
 

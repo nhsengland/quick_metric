@@ -20,8 +20,10 @@ dependencies = [
     "pyyaml>=6.0.0",
     "numpy>=1.24.0",
     "loguru>=0.7.0",
+    "oops-its-a-pipeline @ git+https://github.com/nhsengland/oops-its-a-pipeline.git",
+    "nhs-herbot @ git+https://github.com/nhsengland/nhs_herbot.git",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 
 [project.optional-dependencies]
 dev = [
@@ -39,16 +41,43 @@ docs = [
 ]
 
 [tool.ruff]
-line-length = 79
+line-length = 100
 src = ["quick_metric"]
 include = ["pyproject.toml", "quick_metric/**/*.py"]
 
 [tool.ruff.lint]
-extend-select = ["I"]  # Add import sorting
+extend-select = [
+    "I",    # isort (import sorting)
+    "F",    # Pyflakes (unused imports, undefined names)
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings  
+    "UP",   # pyupgrade (modern Python syntax)
+    "B",    # flake8-bugbear (common bugs)
+    "SIM",  # flake8-simplify (code simplification)
+    "C4",   # flake8-comprehensions (list/dict improvements)
+    "PIE",  # flake8-pie (misc linting)
+    "RET",  # flake8-return (return statement improvements)
+    "PT",   # flake8-pytest-style (pytest best practices)
+    "ARG",  # flake8-unused-arguments (unused function arguments)
+    "PL",   # Pylint (general code quality)
+    "PERF", # Perflint (performance improvements)
+]
+
+# Ignore some overly strict rules that don't fit our project
+ignore = [
+    "PLR0913", # Too many arguments to function call
+    "PLR2004", # Magic value used in comparison
+    "PLR0915", # Too many statements
+    "PLR0912", # Too many branches
+    "ARG002",  # Unused method argument (common in interfaces)
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["quick_metric"]
 force-sort-within-sections = true
+
+[tool.ruff.format]
+quote-style = "double"
 
 [tool.coverage.run]
 source = ["quick_metric"]
