@@ -6,6 +6,7 @@ from quick_metric import (
     interpret_metric_instructions,
     metric_method,
 )
+from quick_metric.method_definitions import _registry, list_method_names
 
 
 class TestCompleteWorkflow:
@@ -18,15 +19,13 @@ class TestCompleteWorkflow:
         assert set(basic_results.keys()) == expected_keys
 
     @pytest.mark.parametrize(
-        "metric_name,expected_methods",
+        ("metric_name", "expected_methods"),
         [
             ("cancer_analysis", {"count_records", "mean_value"}),
             ("high_value_cases", {"count_records", "sum_values"}),
         ],
     )
-    def test_yaml_to_results_metric_structure(
-        self, basic_results, metric_name, expected_methods
-    ):
+    def test_yaml_to_results_metric_structure(self, basic_results, metric_name, expected_methods):
         """Test that each metric returns expected method results."""
         assert isinstance(basic_results[metric_name], dict)
         assert set(basic_results[metric_name].keys()) == expected_methods
@@ -43,6 +42,8 @@ class TestCompleteWorkflow:
 
     def test_custom_methods_end_to_end(self, healthcare_data):
         """Test end-to-end workflow with custom methods."""
+        # Store initial state
+        initial_methods = set(list_method_names())
 
         @metric_method
         def efficiency_score(data):
@@ -53,22 +54,31 @@ class TestCompleteWorkflow:
                 return round(fast_processes / total * 100, 2)
             return 0.0
 
-        config = {
-            "efficiency_analysis": {
-                "method": ["efficiency_score", "count_records"],
-                "filter": {
-                    "and": {
-                        "raw_local_point_of_delivery_code": "TESTREPORT",
-                        "not": {"remove": "Remove"},
-                    }
-                },
+        try:
+            config = {
+                "efficiency_analysis": {
+                    "method": ["efficiency_score", "count_records"],
+                    "filter": {
+                        "and": {
+                            "raw_local_point_of_delivery_code": "TESTREPORT",
+                            "not": {"remove": "Remove"},
+                        }
+                    },
+                }
             }
-        }
 
-        results = interpret_metric_instructions(healthcare_data, config)
+            results = interpret_metric_instructions(healthcare_data, config)
 
-        expected_methods = {"efficiency_score", "count_records"}
-        assert set(results["efficiency_analysis"].keys()) == expected_methods
+            expected_methods = {"efficiency_score", "count_records"}
+            actual_keys = set(results["efficiency_analysis"].keys())
+            assert actual_keys == expected_methods
+        finally:
+            # Clean up custom method
+            current_methods = set(list_method_names())
+            new_methods = current_methods - initial_methods
+            for method_name in new_methods:
+                if method_name in _registry._methods:
+                    del _registry._methods[method_name]
 
     def test_complex_filtering_workflow(self, healthcare_data):
         """Test workflow with complex nested filters."""
@@ -111,16 +121,16 @@ class TestCompleteWorkflow:
             }
         }
 
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(Exception, match="nonexistent_method"):
             interpret_metric_instructions(healthcare_data, config)
-
-        # Should contain information about the missing method
-        assert "nonexistent_method" in str(exc_info.value)
 
     def test_empty_data_workflow(self, empty_data):
         """Test workflow behavior with empty dataset."""
         config = {
-            "empty_test": {"method": ["count_records"], "filter": {"col1": "any_value"}}
+            "empty_test": {
+                "method": ["count_records"],
+                "filter": {"col1": "any_value"},
+            }
         }
 
         results = interpret_metric_instructions(empty_data, config)
@@ -155,7 +165,7 @@ class TestCompleteWorkflow:
         assert set(results.keys()) == expected_keys
 
     @pytest.mark.parametrize(
-        "metric_name,expected_methods",
+        ("metric_name", "expected_methods"),
         [
             ("metric_1", {"count_records"}),
             ("metric_2", {"sum_values", "mean_value"}),
@@ -165,7 +175,7 @@ class TestCompleteWorkflow:
     def test_multiple_metrics_individual_structure(
         self, healthcare_data, metric_name, expected_methods
     ):
-        """Test each metric has correct structure in multiple metrics workflow."""
+        """Test each metric has correct structure in multiple metrics."""
         config = {
             "metric_1": {
                 "method": ["count_records"],
