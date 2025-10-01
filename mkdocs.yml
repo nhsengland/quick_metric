@@ -1,5 +1,5 @@
 site_name: Quick Metric
-site_description: NHS England - Data Science Framework for Custom Analytical Methods
+site_description: A framework for quickly creating metrics using easy-to-edit YAML configs and reusable methods to filter, calculate, and transform data
 site_author: NHS England - Data Science and Applied AI Team
 site_url: https://nhsengland.github.io/quick_metric
 repo_url: https://github.com/nhsengland/quick_metric
@@ -51,10 +51,11 @@ nav:
   - Getting Started: getting_started.md
   - API Reference: 
     - api_reference/index.md
+    - Core Functions: api_reference/core.md
     - Method Definitions: api_reference/method_definitions.md
-    - Apply Methods: api_reference/apply_methods.md
     - Filter: api_reference/filter.md
-    - Interpret Instructions: api_reference/interpret_instructions.md
+    - Apply Methods: api_reference/apply_methods.md
+    - Pipeline Integration: api_reference/pipeline.md
 
 extra_css:
   - stylesheets/nhs_style.css
