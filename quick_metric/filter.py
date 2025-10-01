@@ -67,14 +67,14 @@ interpret_instructions : Module that uses filtering before applying methods
 apply_methods : Module that processes filtered data
 """
 
-from typing import Any, Dict, Union
+from typing import Any, Union
 
-import pandas as pd
 from loguru import logger
+import pandas as pd
 
 
-def evaluate_condition(
-    data_df: pd.DataFrame, column: str, value: Union[Dict, Any]
+def evaluate_condition(  # noqa: PLR0911
+    data_df: pd.DataFrame, column: str, value: Union[dict, Any]
 ) -> pd.Series:
     """
     Evaluate a condition based on the provided column and value.
@@ -131,38 +131,41 @@ def evaluate_condition(
     return pd.Series(index=data_df.index, data=False, dtype=bool)
 
 
-def recursive_filter(data_df: pd.DataFrame, filters: Dict) -> pd.Series:
+def recursive_filter(data_df: pd.DataFrame, filters: dict) -> pd.Series:
     """
-    Recursively applies filters to a DataFrame and returns a boolean filter mask.
+    Recursively applies filters to a DataFrame and returns a boolean mask.
 
     Parameters
     ----------
     data_df : pd.DataFrame
         The DataFrame to filter.
     filters : dict
-        A dictionary specifying the filters to apply. The dictionary can contain the keys "and",
-        "or", and "not" to combine conditions recursively.
+        A dictionary specifying the filters to apply. The dictionary can
+        contain the keys "and", "or", and "not" to combine conditions
+        recursively.
 
     Returns
     -------
     pd.Series
-        A boolean filter mask indicating which rows of the DataFrame match the filters.
+        A boolean filter mask indicating which rows of the DataFrame match
+        the filters.
 
     Notes
     -----
     The filters dictionary can have the following structure:
     - {"and": {condition1, condition2, ...}}: All conditions must be met.
-    - {"or": {condition1, condition2, ...}}: At least one condition must be met.
+    - {"or": {condition1, condition2, ...}}: At least one condition must
+      be met.
     - {"not": {condition}}: The condition must not be met.
     - {column: value}: A single condition to apply to a column.
 
-    Each condition is a key-value pair where the key is the column name and the value is the
-    condition to apply to that column.
+    Each condition is a key-value pair where the key is the column name
+    and the value is the condition to apply to that column.
     """
     # Handle empty filters - return all rows as True
     if not filters:
         return pd.Series(index=data_df.index, data=True, dtype=bool)
-    
+
     if "and" in filters:
         mask = pd.Series(index=data_df.index, data=True, dtype=bool)
         for key, value in filters["and"].items():
@@ -173,7 +176,7 @@ def recursive_filter(data_df: pd.DataFrame, filters: Dict) -> pd.Series:
                 if condition_result is not None:
                     mask &= condition_result
         return mask
-    elif "or" in filters:
+    if "or" in filters:
         mask = pd.Series(index=data_df.index, data=False, dtype=bool)
         or_conditions = filters["or"]
 
@@ -193,15 +196,14 @@ def recursive_filter(data_df: pd.DataFrame, filters: Dict) -> pd.Series:
                     if condition_result is not None:
                         mask |= condition_result
         return mask
-    elif "not" in filters:
+    if "not" in filters:
         return ~recursive_filter(data_df, filters["not"])
-    else:
-        return evaluate_condition(
-            data_df, list(filters.keys())[0], list(filters.values())[0]
-        )
+    return evaluate_condition(
+        data_df, list(filters.keys())[0], list(filters.values())[0]
+    )
 
 
-def apply_filter(data_df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
+def apply_filter(data_df: pd.DataFrame, filters: dict) -> pd.DataFrame:
     """
     Apply filters to the DataFrame based on the provided dictionary.
 
@@ -218,13 +220,13 @@ def apply_filter(data_df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
         Filtered DataFrame.
     """
     logger.trace(f"Applying filters to DataFrame with {len(data_df)} rows")
-    
+
     if not filters:
         logger.trace("No filters specified, returning original DataFrame")
         return data_df
-        
+
     mask = recursive_filter(data_df, filters)
     filtered_df = data_df.loc[mask]  # type: ignore[return-value]
-    
+
     logger.trace(f"Filter applied: {len(filtered_df)} rows remaining")
     return filtered_df

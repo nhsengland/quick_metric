@@ -55,10 +55,10 @@ method_definitions : Module for registering methods
 filter : Module for data filtering before method application
 """
 
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Optional
 
-import pandas as pd
 from loguru import logger
+import pandas as pd
 
 from quick_metric.method_definitions import METRICS_METHODS
 
@@ -72,7 +72,7 @@ class MetricsMethodNotFoundError(ValueError):
 def apply_method(
     data: pd.DataFrame,
     method_name: str,
-    metrics_methods: Optional[Dict[str, Callable]] = None,
+    metrics_methods: Optional[dict[str, Callable]] = None,
 ) -> Any:
     """
     Apply the specified method to the filtered data from metrics methods.
@@ -121,9 +121,9 @@ def apply_method(
 
 def apply_methods(
     data: pd.DataFrame,
-    method_names: List[str],
-    metrics_methods: Optional[Dict[str, Callable]] = None,
-) -> Dict[str, Any]:
+    method_names: list[str],
+    metrics_methods: Optional[dict[str, Callable]] = None,
+) -> dict[str, Any]:
     """
     Apply multiple methods to the data.
     The methods are specified by their names and are looked up in the

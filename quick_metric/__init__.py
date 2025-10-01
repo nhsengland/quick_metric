@@ -78,13 +78,3 @@ __all__ = [
     "metric_method",
     "METRICS_METHODS",
 ]
-
-__all__ = [
-    "apply_method",
-    "apply_methods",
-    "apply_filter",
-    "interpret_metric_instructions",
-    "read_metric_instructions",
-    "METRICS_METHODS",
-    "metric_method",
-]

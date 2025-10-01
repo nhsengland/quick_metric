@@ -76,18 +76,18 @@ method_definitions : Method registration system used by this module
 """
 
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Optional, Union
 
+from loguru import logger
 import pandas as pd
 import yaml
-from loguru import logger
 
 from quick_metric.apply_methods import apply_methods
 from quick_metric.filter import apply_filter
 from quick_metric.method_definitions import METRICS_METHODS
 
 
-def read_metric_instructions(metric_config_path: Path) -> Dict:
+def read_metric_instructions(metric_config_path: Path) -> dict:
     """
     Read metric_instructions dictionary from a YAML config file.
 
@@ -102,36 +102,28 @@ def read_metric_instructions(metric_config_path: Path) -> Dict:
         The 'metric_instructions' dictionary from the YAML file.
     """
     logger.info(f"Reading metric configuration from {metric_config_path}")
-    
+
     if not metric_config_path.exists():
         logger.error(f"Configuration file not found: {metric_config_path}")
-        raise FileNotFoundError(
-            f"Configuration file not found: {metric_config_path}"
-        )
-    
+        raise FileNotFoundError(f"Configuration file not found: {metric_config_path}")
+
     try:
-        with open(metric_config_path, "r", encoding="utf-8") as file:
+        with open(metric_config_path, encoding="utf-8") as file:
             metric_configs = yaml.safe_load(file)
-            
+
         if not isinstance(metric_configs, dict):
             logger.error("Configuration file must contain a YAML dictionary")
-            raise ValueError(
-                "Configuration file must contain a YAML dictionary"
-            )
-            
+            raise ValueError("Configuration file must contain a YAML dictionary")
+
         metric_instructions = metric_configs.get("metric_instructions", {})
-        
+
         if not metric_instructions:
-            logger.warning(
-                "No 'metric_instructions' found in configuration file"
-            )
+            logger.warning("No 'metric_instructions' found in configuration file")
         else:
-            logger.success(
-                f"Loaded {len(metric_instructions)} metric configurations"
-            )
-            
+            logger.success(f"Loaded {len(metric_instructions)} metric configurations")
+
         return metric_instructions
-        
+
     except yaml.YAMLError as e:
         logger.error(f"Invalid YAML in configuration file: {e}")
         raise ValueError(f"Invalid YAML in configuration file: {e}") from e
@@ -139,9 +131,9 @@ def read_metric_instructions(metric_config_path: Path) -> Dict:
 
 def interpret_metric_instructions(
     data: pd.DataFrame,
-    metric_instructions: Dict,
-    metrics_methods: Optional[Dict] = None,
-) -> Dict:
+    metric_instructions: dict,
+    metrics_methods: Optional[dict] = None,
+) -> dict:
     """
     Apply filters and methods from metric instructions to a DataFrame.
 
@@ -166,12 +158,12 @@ def interpret_metric_instructions(
         f"Processing {len(metric_instructions)} metrics on DataFrame "
         f"with {len(data)} rows"
     )
-    
+
     # Basic validation
     if not isinstance(metric_instructions, dict):
         logger.error("metric_instructions must be a dictionary")
         raise ValueError("metric_instructions must be a dictionary")
-    
+
     if data.empty:
         logger.warning("Input DataFrame is empty")
 
@@ -180,31 +172,31 @@ def interpret_metric_instructions(
     for metric_name, metric_instruction in metric_instructions.items():
         with logger.contextualize(metric=metric_name):
             logger.trace("Processing metric")
-            
+
             # Validate metric instruction structure
             if not isinstance(metric_instruction, dict):
                 logger.error("Metric instruction must be a dict")
                 raise ValueError(
                     f"Metric '{metric_name}' instruction must be a dictionary"
                 )
-            
+
             if "method" not in metric_instruction:
                 logger.error("Metric missing 'method' key")
                 raise ValueError(
                     f"Metric '{metric_name}' missing required 'method' key"
                 )
-            
+
             if "filter" not in metric_instruction:
                 logger.error("Metric missing 'filter' key")
                 raise ValueError(
                     f"Metric '{metric_name}' missing required 'filter' key"
                 )
-            
+
             # Apply filter to data
             filtered_data = apply_filter(
                 data_df=data, filters=metric_instruction["filter"]
             )
-            
+
             logger.trace(f"Filtered to {len(filtered_data)} rows")
 
             # Apply methods to filtered data
@@ -214,7 +206,7 @@ def interpret_metric_instructions(
                     method_names=metric_instruction["method"],
                     metrics_methods=metrics_methods,
                 )
-            
+
             logger.success("Metric completed successfully")
 
     logger.success(f"Successfully processed all {len(results)} metrics")
@@ -223,9 +215,9 @@ def interpret_metric_instructions(
 
 def generate_metrics(
     data: pd.DataFrame,
-    config: Union[Path, Dict],
-    metrics_methods: Optional[Dict] = None,
-) -> Dict:
+    config: Union[Path, dict],
+    metrics_methods: Optional[dict] = None,
+) -> dict:
     """
     Generate metrics from data using configuration (main entry point).
 
@@ -288,7 +280,7 @@ def generate_metrics(
         If config parameter is not a valid type.
     """
     logger.info("Starting metric generation")
-    
+
     # Handle different config input types
     if isinstance(config, Path):
         logger.debug(f"Loading configuration from file: {config}")
@@ -308,6 +300,6 @@ def generate_metrics(
         metric_instructions=metric_instructions,
         metrics_methods=metrics_methods,
     )
-    
+
     logger.success("Metric generation completed successfully")
     return results
