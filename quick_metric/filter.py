@@ -198,9 +198,7 @@ def recursive_filter(data_df: pd.DataFrame, filters: dict) -> pd.Series:
         return mask
     if "not" in filters:
         return ~recursive_filter(data_df, filters["not"])
-    return evaluate_condition(
-        data_df, list(filters.keys())[0], list(filters.values())[0]
-    )
+    return evaluate_condition(data_df, list(filters.keys())[0], list(filters.values())[0])
 
 
 def apply_filter(data_df: pd.DataFrame, filters: dict) -> pd.DataFrame:

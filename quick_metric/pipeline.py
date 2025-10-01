@@ -282,10 +282,7 @@ class GenerateMetricsStage(PipelineStage):
             if hasattr(config, "config"):
                 config = config.config
             else:
-                error_msg = (
-                    f"Config object must have 'config' attribute, "
-                    f"got {type(config)}"
-                )
+                error_msg = f"Config object must have 'config' attribute, got {type(config)}"
                 raise ValueError(error_msg)
 
         # Validate data input
@@ -304,9 +301,7 @@ class GenerateMetricsStage(PipelineStage):
 
         try:
             # Generate metrics using the core function
-            results = generate_metrics(
-                data=data, config=config, metrics_methods=metrics_methods
-            )
+            results = generate_metrics(data=data, config=config, metrics_methods=metrics_methods)
 
             # Store results in context
             context[self.metrics_output] = results
@@ -316,8 +311,7 @@ class GenerateMetricsStage(PipelineStage):
         except Exception as error:
             logger.error(f"Metrics generation failed: {str(error)}")
             raise PipelineStageValidationError(
-                f"Stage '{self.name}' failed during metrics "
-                f"generation: {str(error)}"
+                f"Stage '{self.name}' failed during metrics generation: {str(error)}"
             ) from error
 
         return context

@@ -45,8 +45,7 @@ class MethodNotFoundError(MetricMethodError):
 
         methods_list = ", ".join(available_methods) if available_methods else "None"
         message = (
-            f"Metric method '{method_name}' is not registered. "
-            f"Available methods: {methods_list}"
+            f"Metric method '{method_name}' is not registered. Available methods: {methods_list}"
         )
 
         if available_methods:
@@ -72,10 +71,7 @@ class MethodExecutionError(MetricMethodError):
         self.original_error = original_error
         self.data_info = data_info
 
-        message = (
-            f"Metric method '{method_name}' failed during execution: "
-            f"{str(original_error)}"
-        )
+        message = f"Metric method '{method_name}' failed during execution: {str(original_error)}"
         if data_info:
             message += f". Data info: {data_info}"
 
@@ -117,8 +113,7 @@ class DuplicateMethodWarning(LoggedException):
         self.source_info = source_info
 
         message = (
-            f"Method '{method_name}' is being re-registered, "
-            f"overwriting previous registration"
+            f"Method '{method_name}' is being re-registered, overwriting previous registration"
         )
         if source_info:
             message += f" from {source_info}"

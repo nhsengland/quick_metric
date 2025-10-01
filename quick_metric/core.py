@@ -154,10 +154,7 @@ def interpret_metric_instructions(
     if metrics_methods is None:
         metrics_methods = METRICS_METHODS
 
-    logger.info(
-        f"Processing {len(metric_instructions)} metrics on DataFrame "
-        f"with {len(data)} rows"
-    )
+    logger.info(f"Processing {len(metric_instructions)} metrics on DataFrame with {len(data)} rows")
 
     # Basic validation
     if not isinstance(metric_instructions, dict):
@@ -176,26 +173,18 @@ def interpret_metric_instructions(
             # Validate metric instruction structure
             if not isinstance(metric_instruction, dict):
                 logger.error("Metric instruction must be a dict")
-                raise ValueError(
-                    f"Metric '{metric_name}' instruction must be a dictionary"
-                )
+                raise ValueError(f"Metric '{metric_name}' instruction must be a dictionary")
 
             if "method" not in metric_instruction:
                 logger.error("Metric missing 'method' key")
-                raise ValueError(
-                    f"Metric '{metric_name}' missing required 'method' key"
-                )
+                raise ValueError(f"Metric '{metric_name}' missing required 'method' key")
 
             if "filter" not in metric_instruction:
                 logger.error("Metric missing 'filter' key")
-                raise ValueError(
-                    f"Metric '{metric_name}' missing required 'filter' key"
-                )
+                raise ValueError(f"Metric '{metric_name}' missing required 'filter' key")
 
             # Apply filter to data
-            filtered_data = apply_filter(
-                data_df=data, filters=metric_instruction["filter"]
-            )
+            filtered_data = apply_filter(data_df=data, filters=metric_instruction["filter"])
 
             logger.trace(f"Filtered to {len(filtered_data)} rows")
 
@@ -290,9 +279,7 @@ def generate_metrics(
         metric_instructions = config
     else:
         logger.error(f"Invalid config type: {type(config)}")
-        raise ValueError(
-            f"Config must be a pathlib.Path object or dict, got {type(config)}"
-        )
+        raise ValueError(f"Config must be a pathlib.Path object or dict, got {type(config)}")
 
     # Generate metrics using the existing function
     results = interpret_metric_instructions(
