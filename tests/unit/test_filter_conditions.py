@@ -3,7 +3,7 @@
 import pandas as pd
 import pytest
 
-from quick_metric.filter import evaluate_condition
+from quick_metric._filter import evaluate_condition
 
 
 class TestEvaluateCondition:

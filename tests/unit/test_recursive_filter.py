@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 from unittest.mock import patch
 
-from quick_metric.filter import recursive_filter, evaluate_condition
+from quick_metric._filter import recursive_filter, evaluate_condition
 
 
 class TestRecursiveFilter:
@@ -21,7 +21,7 @@ class TestRecursiveFilter:
             }
         )
 
-    @patch("quick_metric.filter.evaluate_condition")
+    @patch("quick_metric._filter.evaluate_condition")
     def test_and_condition_calls_evaluate_condition(self, mock_evaluate, sample_data):
         """Test that AND condition calls evaluate_condition for each key."""
         # Setup mock to return specific boolean series
@@ -41,7 +41,7 @@ class TestRecursiveFilter:
         expected = pd.Series([True, False, False, False])
         pd.testing.assert_series_equal(result, expected)
 
-    @patch("quick_metric.filter.evaluate_condition")
+    @patch("quick_metric._filter.evaluate_condition")
     def test_or_condition_calls_evaluate_condition(self, mock_evaluate, sample_data):
         """Test that OR condition calls evaluate_condition for each key."""
         mock_evaluate.side_effect = [

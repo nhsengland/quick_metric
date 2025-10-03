@@ -3,11 +3,8 @@
 import pandas as pd
 import pytest
 
-from quick_metric.apply_methods import (
-    MetricsMethodNotFoundError,
-    apply_method,
-    apply_methods,
-)
+from quick_metric._apply_methods import apply_method, apply_methods
+from quick_metric.exceptions import MetricsMethodNotFoundError
 
 
 class TestApplyMethod:
@@ -25,9 +22,10 @@ class TestApplyMethod:
             return len(data)
 
         methods_dict = {"test_method": test_method}
-        result = apply_method(sample_data, "test_method", methods_dict)
+        result_key, result_value = apply_method(sample_data, "test_method", methods_dict)
 
-        assert result == 5
+        assert result_key == "test_method"
+        assert result_value == 5
 
     def test_apply_method_raises_error_for_missing_method(self, sample_data):
         """Test that apply_method raises error for non-existent method."""
@@ -39,8 +37,9 @@ class TestApplyMethod:
     def test_apply_method_uses_default_methods_when_none_provided(self, sample_data):
         """Test that apply_method uses METRICS_METHODS when none provided."""
         # Just test that it doesn't crash and uses the real methods
-        result = apply_method(sample_data, "count_records")
-        assert result == 5
+        result_key, result_value = apply_method(sample_data, "count_records")
+        assert result_key == "count_records"
+        assert result_value == 5
 
     def test_apply_method_passes_through_method_return_value(self, sample_data):
         """Test that apply_method returns exactly what the method returns."""
@@ -49,9 +48,10 @@ class TestApplyMethod:
             return {"mean": data["value"].mean(), "count": len(data)}
 
         methods_dict = {"test_method": complex_method}
-        result = apply_method(sample_data, "test_method", methods_dict)
+        result_key, result_value = apply_method(sample_data, "test_method", methods_dict)
 
-        assert result == {"mean": 3.0, "count": 5}
+        assert result_key == "test_method"
+        assert result_value == {"mean": 3.0, "count": 5}
 
     def test_apply_method_propagates_method_exceptions(self, sample_data):
         """Test that exceptions from methods are propagated correctly."""
@@ -129,11 +129,11 @@ class TestApplyMethods:
         """Test that exceptions from apply_method are propagated."""
 
         def failing_method(data):
-            raise MetricsMethodNotFoundError("Test error")
+            raise ValueError("Test error")
 
         methods_dict = {"failing_method": failing_method}
 
-        with pytest.raises(MetricsMethodNotFoundError):
+        with pytest.raises(ValueError):
             apply_methods(sample_data, ["failing_method"], methods_dict)
 
     def test_apply_methods_uses_default_methods_when_none_provided(self, sample_data):

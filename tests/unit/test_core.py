@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from quick_metric import generate_metrics
+from quick_metric.core import interpret_metric_instructions, read_metric_instructions
 
 
 class TestGenerateMetrics:
@@ -125,7 +126,7 @@ class TestReadMetricInstructions:
     def test_read_nonexistent_file(self):
         """Test reading from nonexistent file raises FileNotFoundError."""
         from pathlib import Path
-        from quick_metric import read_metric_instructions
+        from quick_metric.core import read_metric_instructions
 
         nonexistent_path = Path("/nonexistent/path/config.yaml")
 
@@ -138,7 +139,6 @@ class TestReadMetricInstructions:
         """Test reading invalid YAML raises ValueError."""
         import tempfile
         from pathlib import Path
-        from quick_metric import read_metric_instructions
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write("invalid: yaml: content: [")  # Invalid YAML
@@ -157,7 +157,6 @@ class TestReadMetricInstructions:
         import tempfile
         import yaml
         from pathlib import Path
-        from quick_metric import read_metric_instructions
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             yaml.dump(["list", "instead", "of", "dict"], f)
@@ -176,7 +175,6 @@ class TestReadMetricInstructions:
         import tempfile
         import yaml
         from pathlib import Path
-        from quick_metric import read_metric_instructions
 
         config_data = {"some_other_key": "value"}
 

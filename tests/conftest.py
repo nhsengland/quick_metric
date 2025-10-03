@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 import yaml
 
-from quick_metric import (
+from quick_metric.core import (
     interpret_metric_instructions,
     read_metric_instructions,
 )

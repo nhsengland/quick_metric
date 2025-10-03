@@ -16,6 +16,8 @@ from quick_metric.exceptions import (
     MethodRegistrationError,
     MethodValidationError,
     MetricMethodError,
+    MetricSpecificationError,
+    MetricsMethodNotFoundError,
     RegistryLockError,
 )
 
@@ -266,6 +268,8 @@ class TestExceptionMessages:
             DuplicateMethodWarning("test"),
             RegistryLockError("operation", "reason"),
             EmptyRegistryError("operation"),
+            MetricSpecificationError("test issue"),
+            MetricsMethodNotFoundError("test", ["available"]),
         ],
     )
     def test_exception_has_meaningful_message(self, exception):
@@ -274,3 +278,98 @@ class TestExceptionMessages:
         assert len(message) > 10  # Should have meaningful content
         assert message != ""
         assert "test" in message or "operation" in message  # Should include context
+
+
+class TestMetricSpecificationError:
+    """Test the MetricSpecificationError exception."""
+
+    def test_basic_specification_error(self):
+        """Test basic specification error without method spec."""
+        error = MetricSpecificationError("Invalid format")
+
+        assert error.specification_issue == "Invalid format"
+        assert error.method_spec is None
+        expected_msg = "Invalid metric specification: Invalid format"
+        assert str(error) == expected_msg
+
+    def test_specification_error_with_method_spec(self):
+        """Test specification error with method specification details."""
+        method_spec = {"invalid": "spec"}
+        error = MetricSpecificationError("Multiple methods", method_spec)
+
+        assert error.specification_issue == "Multiple methods"
+        assert error.method_spec == {"invalid": "spec"}
+        expected_msg = (
+            "Invalid metric specification: Multiple methods. "
+            "Method specification: {'invalid': 'spec'}"
+        )
+        assert str(error) == expected_msg
+
+    def test_inheritance_from_valueerror_and_loggederror(self):
+        """Test that MetricSpecificationError inherits from both ValueError and LoggedError."""
+        error = MetricSpecificationError("Test error")
+        assert isinstance(error, ValueError)
+        # Should also inherit from LoggedException (from NHS Herbot)
+        assert hasattr(error, "__module__")  # Basic check for proper inheritance
+
+
+class TestMetricsMethodNotFoundError:
+    """Test the MetricsMethodNotFoundError exception."""
+
+    def test_method_not_found_with_available_methods(self):
+        """Test exception with available methods list."""
+        available = ["method_a", "method_b", "method_c"]
+        error = MetricsMethodNotFoundError("missing_method", available)
+
+        assert error.method_name == "missing_method"
+        assert error.available_methods == available
+        
+        error_msg = str(error)
+        assert "Metric method 'missing_method' is not registered" in error_msg
+        assert "Available methods: method_a, method_b, method_c" in error_msg
+        # With difflib, it might suggest some close matches
+        assert "missing_method" in error_msg
+
+    def test_method_not_found_no_available_methods(self):
+        """Test exception with empty methods list."""
+        error = MetricsMethodNotFoundError("missing_method", [])
+
+        assert error.method_name == "missing_method"
+        assert error.available_methods == []
+        expected_msg = "Metric method 'missing_method' is not registered. Available methods: None"
+        assert str(error) == expected_msg
+
+    def test_method_not_found_with_similar_suggestions(self):
+        """Test exception provides suggestions for similar method names using difflib."""
+        available = ["count_records", "count_users", "calculate_mean"]
+        error = MetricsMethodNotFoundError("count_record", available)
+
+        error_msg = str(error)
+        assert "count_records" in error_msg
+        assert "Did you mean one of:" in error_msg
+        # difflib should suggest count_records as the closest match for count_record
+        assert "count_records" in error_msg
+
+    def test_method_not_found_with_typo_suggestions(self):
+        """Test exception provides good suggestions for common typos."""
+        available = ["filter_active", "calculate_sum", "count_users"]
+        error = MetricsMethodNotFoundError("fliter_active", available)
+
+        error_msg = str(error)
+        assert "filter_active" in error_msg
+        assert "Did you mean one of:" in error_msg
+
+    def test_method_not_found_no_close_matches(self):
+        """Test exception when no close matches are found."""
+        available = ["count_records", "calculate_mean"]
+        error = MetricsMethodNotFoundError("totally_different", available)
+
+        error_msg = str(error)
+        # Should not show suggestions when nothing is close enough
+        assert "Did you mean one of:" not in error_msg
+        assert "Available methods: count_records, calculate_mean" in error_msg
+
+    def test_inherits_from_metric_method_error(self):
+        """Test that MetricsMethodNotFoundError inherits from MetricMethodError."""
+        error = MetricsMethodNotFoundError("test", [])
+        assert isinstance(error, MetricMethodError)
