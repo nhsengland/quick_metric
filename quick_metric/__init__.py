@@ -13,7 +13,7 @@ The main workflow involves:
 
 Examples
 --------
-Basic usage with the new generate_metrics function:
+Basic usage with generate_metrics:
 
 >>> import pandas as pd
 >>> from quick_metric import metric_method, generate_metrics
@@ -22,59 +22,70 @@ Basic usage with the new generate_metrics function:
 ... def count_records(data):
 ...     return len(data)
 >>>
->>> data = pd.DataFrame({'category': ['A', 'B', 'A'], 'value': [1, 2, 3]})
->>> config = {
-...     'category_a_count': {
-...         'method': ['count_records'],
-...         'filter': {'category': 'A'}
-...     }
-... }
->>> results = generate_metrics(data, config)
-
-Legacy usage with interpret_metric_instructions:
-
->>> import pandas as pd
->>> from quick_metric import metric_method, interpret_metric_instructions
->>>
 >>> @metric_method
-... def count_records(data):
-...     return len(data)
+... def average_col(data, column='value'):
+...     return data[column].mean()
 >>>
 >>> data = pd.DataFrame({'category': ['A', 'B', 'A'], 'value': [1, 2, 3]})
->>> config = {
-...     'category_a_count': {
-...         'method': ['count_records'],
+>>>
+>>> # Simple method specification
+>>> config1 = {
+...     'record_count': {
+...         'method': 'count_records',
+...         'filter': {}
+...     }
+... }
+>>> results1 = generate_metrics(data, config1)
+>>>
+>>> # Multiple methods
+>>> config2 = {
+...     'analysis': {
+...         'method': ['count_records', 'average_col'],
 ...         'filter': {'category': 'A'}
 ...     }
 ... }
->>> results = interpret_metric_instructions(data, config)
+>>> results2 = generate_metrics(data, config2)
+>>>
+>>> # Method with parameters
+>>> config3 = {
+...     'custom_avg': {
+...         'method': {'average_col': {'column': 'value'}},
+...         'filter': {}
+...     }
+... }
+>>> results3 = generate_metrics(data, config3)
+
+Method discovery:
+
+>>> from quick_metric import metric_method
+>>>
+>>> # Get information about a specific method
+>>> method_info = metric_method('count_records')
+>>>
+>>> # List all available methods
+>>> all_methods = metric_method()
+>>> print(sorted(all_methods.keys()))
+
+Note
+----
+This module provides a clean, minimal public API focused on the most common
+use cases. Method specifications support multiple flexible formats:
+- Single method: "method": "method_name"
+- Multiple methods: "method": ["method1", "method2"]
+- Method with parameters: "method": {"method_name": {"param": "value"}}
 
 See Also
 --------
 method_definitions : Core decorator for registering metric methods
-filter : Data filtering functionality
-apply_methods : Method application logic
-core : Main orchestration functions
+core : Main metric generation functionality
 """
 
-from quick_metric.apply_methods import apply_method, apply_methods
-from quick_metric.core import (
-    generate_metrics,
-    interpret_metric_instructions,
-    read_metric_instructions,
-)
-from quick_metric.filter import apply_filter
-from quick_metric.method_definitions import METRICS_METHODS, metric_method
+from quick_metric.core import generate_metrics
+from quick_metric.method_definitions import metric_method
 
 __version__ = "0.0.1"
 
 __all__ = [
     "generate_metrics",
-    "interpret_metric_instructions",
-    "read_metric_instructions",
-    "apply_method",
-    "apply_methods",
-    "apply_filter",
     "metric_method",
-    "METRICS_METHODS",
 ]
