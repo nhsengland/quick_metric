@@ -49,9 +49,20 @@ plugins:
 nav:
   - Home: index.md
   - Getting Started: getting_started.md
+  - Usage Guide: 
+    - Overview: usage/index.md
+    - Output Formats:
+      - Nested Dictionary: usage/nested.md
+      - DataFrame: usage/dataframe.md  
+      - Records: usage/records.md
+      - Flat DataFrame: usage/flat_dataframe.md
+    - Configuration: configuration.md
+    - Pipeline Integration: pipeline_integration.md
+  - Contributing: contributing.md
   - API Reference: 
     - api_reference/index.md
     - Core Functions: api_reference/core.md
+    - Output Formats: api_reference/output_formats.md
     - Method Definitions: api_reference/method_definitions.md
     - Filter: api_reference/filter.md
     - Apply Methods: api_reference/apply_methods.md

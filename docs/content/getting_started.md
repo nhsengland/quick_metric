@@ -1,243 +1,193 @@
 # Getting Started
 
-This guide will help you get started with **Quick Metric** and begin creating metrics for your data analysis workflows.
+This guide will help you install **Quick Metric** and set up your development environment.
+
+## Prerequisites
+
+| Requirement | Version | Description |
+|-------------|---------|-------------|
+| **Python** | 3.9+ | Required for modern type hints and dependency compatibility |
+| **Git** | Latest | Version control system for cloning the repository |
+| **uv** (Optional) | Latest | Fast Python package manager (recommended for dependency management) |
+
+!!! info "Pipeline Integration"
+    Quick Metric includes optional support for pipeline integration with `oops-its-a-pipeline`. This dependency is automatically installed and enables advanced workflow capabilities. All pipeline functionality is optional for standalone metric processing.
 
 ## Installation
 
-### Prerequisites
+Choose your preferred installation method:
 
-Quick Metric requires Python 3.9+ and works best with pandas DataFrames.
+=== "Git Installation (Recommended)"
 
-### Using Git Clone (Current)
+    Install directly from the GitHub repository:
 
-    git clone <repository-url>
-    cd quick_metric
-    uv venv && source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-    uv pip install -e .
+    === "uv (Recommended)"
 
-### Future Package Installation
+        ```bash
+        uv add git+https://github.com/nhsengland/quick_metric.git
+        ```
 
-    # Coming soon
-    pip install quick-metric
-    # or
-    uv add quick-metric
+    === "pip"
 
-## Basic Usage
+        ```bash
+        pip install git+https://github.com/nhsengland/quick_metric.git
+        ```
 
-### 1. Define Custom Metric Methods
+=== "PyPI"
 
-The foundation of Quick Metric is the `@metric_method` decorator which registers your custom functions:
+    !!! warning "Not Yet Available"
+        PyPI installation is not yet available but will be supported in future releases.
 
-```python
-from quick_metric import metric_method
+    === "pip"
 
-@metric_method
-def count_records(data):
-    """Count the number of records in the DataFrame."""
-    return len(data)
+        ```bash
+        pip install quick-metric
+        ```
 
-@metric_method
-def mean_value(data, column='value'):
-    """Calculate mean of a specified column."""
-    return data[column].mean() if column in data.columns else 0.0
+    === "uv"
 
-@metric_method
-def percentage_above_threshold(data, column='value', threshold=100):
-    """Calculate percentage of records above a threshold."""
-    if len(data) == 0:
-        return 0.0
-    above_threshold = len(data[data[column] > threshold])
-    return (above_threshold / len(data)) * 100
-```
+        ```bash
+        uv add quick-metric
+        ```
 
-### 2. Prepare Your Data
+!!! tip "Development Installation"
+    For development work, see the [Development Setup](#development-setup) section below.
 
-Quick Metric works with pandas DataFrames:
+!!! example "Quick Start Example"
+    Here's a minimal example to verify your installation:
 
-```python
-import pandas as pd
+    ```python
+    from quick_metric import metric_method, generate_metrics
+    import pandas as pd
 
-data = pd.DataFrame({
-    'category': ['A', 'B', 'A', 'C', 'B', 'A'],
-    'value': [120, 80, 150, 200, 90, 110],
-    'status': ['active', 'inactive', 'active', 'active', 'active', 'inactive'],
-    'region': ['North', 'South', 'North', 'East', 'South', 'North']
-})
-```
+    @metric_method
+    def count_records(data):
+        """Count the number of records in the DataFrame."""
+        return len(data)
 
-### 3. Create Configuration
+    # Create sample data
+    data = pd.DataFrame({
+        'category': ['A', 'B', 'A', 'C'],
+        'value': [10, 20, 30, 40]
+    })
 
-Define which metrics to calculate and what filters to apply:
-
-#### Dictionary Configuration (Recommended)
-
-```python
-config = {
-    'active_category_a': {
-        'method': ['count_records', 'mean_value'],
-        'filter': {
-            'and': {
-                'category': 'A',
-                'status': 'active'
-            }
-        }
-    },
-    'high_value_analysis': {
-        'method': ['count_records', 'percentage_above_threshold'],
-        'filter': {
-            'value': {'greater than': 100}
-        }
-    },
-    'regional_summary': {
-        'method': ['count_records', 'mean_value'],
-        'filter': {
-            'region': ['North', 'East']  # Multiple values = isin condition
+    # Define configuration
+    config = {
+        'basic_count': {
+            'method': ['count_records'],
+            'filter': {}
         }
     }
-}
-```
 
-#### YAML Configuration
-
-```yaml
-# metrics.yaml
-metric_instructions:
-  active_category_a:
-    method: ['count_records', 'mean_value']
-    filter:
-      and:
-        category: A
-        status: active
-  
-  high_value_analysis:
-    method: ['count_records', 'percentage_above_threshold']
-    filter:
-      value:
-        greater than: 100
-```
-
-### 4. Generate Metrics
-
-Use the main entry point to generate your metrics:
-
-```python
-from quick_metric import generate_metrics
-from pathlib import Path
-
-# Option 1: Dictionary configuration
-results = generate_metrics(data, config)
-
-# Option 2: YAML file
-results = generate_metrics(data, Path('metrics.yaml'))
-
-# Access results
-print(f"Active A records: {results['active_category_a']['count_records']}")
-print(f"Mean value: {results['active_category_a']['mean_value']}")
-print(f"High value percentage: {results['high_value_analysis']['percentage_above_threshold']}")
-```
-
-## Advanced Features
-
-### Complex Filtering
-
-Quick Metric supports sophisticated filtering logic:
-
-```python
-complex_config = {
-    'complex_analysis': {
-        'method': ['count_records', 'mean_value'],
-        'filter': {
-            'and': {
-                'status': 'active',
-                'value': {'greater than equal': 100},
-                'or': {
-                    'category': 'A',
-                    'region': ['North', 'East']
-                },
-                'not': {
-                    'category': 'B'
-                }
-            }
-        }
-    }
-}
-```
-
-### Pipeline Integration
-
-For complex workflows, integrate with oops-its-a-pipeline:
-
-```python
-from oops_its_a_pipeline import Pipeline, PipelineConfig
-from quick_metric.pipeline import create_metrics_stage
-
-class MetricsConfig(PipelineConfig):
-    model_config = {'arbitrary_types_allowed': True}
-    data: pd.DataFrame = your_data
-    config: dict = your_config
-
-# Simple pipeline
-pipeline = Pipeline(MetricsConfig()).add_stage(create_metrics_stage())
-results = pipeline.run("metrics_analysis")
-
-# Multi-stage pipeline  
-pipeline = (Pipeline(config)
-    .add_function_stage(load_data, outputs="data")
-    .add_function_stage(prepare_config, outputs="config")
-    .add_stage(create_metrics_stage())
-    .add_function_stage(save_results, inputs="metrics"))
-```
-
-### Error Handling
-
-Quick Metric provides comprehensive error handling:
-
-```python
-try:
+    # Generate metrics
     results = generate_metrics(data, config)
-except ValueError as e:
-    print(f"Configuration error: {e}")
-except Exception as e:
-    print(f"Unexpected error: {e}")
+    print(results['basic_count']['count_records'])  # Should print: 4
+    ```
+
+    If this example runs successfully, you're ready to explore the [Usage Guide](usage/index.md)!
+
+## Development Setup
+
+For contributing to Quick Metric or working with the source code:
+
+=== "uv (Recommended)"
+
+    ```bash
+    git clone https://github.com/nhsengland/quick_metric.git # (1)!
+    cd quick_metric # (2)!
+    uv venv # (3)!
+    source .venv/bin/activate # (4)!
+    uv pip install -e ".[dev,docs]" # (5)!
+    uv pip install pre-commit # (6)!
+    uv run pre-commit install # (7)!
+    ```
+
+    1. Clone the repository from GitHub
+    2. Navigate to the project directory
+    3. Create a virtual environment using uv
+    4. Activate the virtual environment (On Windows: `.venv\Scripts\activate`)
+    5. Install in development mode with all dependencies
+    6. Install pre-commit for code quality hooks
+    7. Set up pre-commit hooks to run automatically on commits
+
+=== "pip"
+
+    ```bash
+    git clone https://github.com/nhsengland/quick_metric.git # (1)!
+    cd quick_metric # (2)!
+    python -m venv .venv # (3)!
+    source .venv/bin/activate # (4)!
+    pip install -e ".[dev,docs]" # (5)!
+    pip install pre-commit # (6)!
+    pre-commit install # (7)!
+    ```
+
+    1. Clone the repository from GitHub
+    2. Navigate to the project directory
+    3. Create a virtual environment using Python's built-in venv
+    4. Activate the virtual environment (On Windows: `.venv\Scripts\activate`)
+    5. Install in development mode with all dependencies
+    6. Install pre-commit for code quality hooks
+    7. Set up pre-commit hooks to run automatically on commits
+
+!!! note "Contribution Guidelines"
+    This project follows modern Python development practices:
+    
+    - **Linting & Formatting**: We use `ruff` for code formatting and linting
+    - **Testing**: `pytest` with structured unit and end-to-end tests
+    - **Dependency Management**: `uv` is preferred for faster dependency resolution
+    - **Documentation**: `mkdocs` with Material theme
+    - **Docstrings**: NumPy-style docstring format
+    
+    For detailed contribution guidelines, see our [Contributing Guide](contributing.md).
+
+!!! tip "Pre-commit Hooks"
+    We strongly recommend setting up pre-commit hooks during development. These automatically run code quality checks before each commit, preventing issues early in the development process. Pre-commit hooks are included in both development setup methods above.
+
+### Development Workflow
+
+#### Testing
+
+```bash
+uv run python -m pytest # (1)!
+uv run python -m pytest tests/unit/test_output_formats.py # (2)!
+uv run python -m pytest --cov=quick_metric # (3)!
+uv run python -m pytest --cov=quick_metric --cov-report=html # (4)!
 ```
 
-## Key Concepts
+1. Run all tests in the project
+2. Run a specific test file
+3. Run tests with coverage reporting
+4. Generate an HTML coverage report for detailed analysis
 
-### Method Registration
+#### Code Quality
 
-- Use `@metric_method` decorator to register functions
-- Functions must accept a DataFrame as the first parameter
-- Additional parameters are supported with defaults
-- Methods are automatically available across your application
-
-### Filtering Logic
-
-- **Simple equality**: `column: value`
-- **List membership**: `column: [value1, value2]` (isin condition)
-- **Logical operators**: `and`, `or`, `not`
-- **Comparisons**: `greater than`, `less than`, `greater than equal`, `less than equal`
-- **Set operations**: `in`, `not in`, `is`
-
-### Result Structure
-
-Results are returned as nested dictionaries:
-
-```python
-{
-    'metric_name': {
-        'method1_name': result1,
-        'method2_name': result2
-    }
-}
+```bash
+uv run ruff format quick_metric/ tests/ # (1)!
+uv run ruff check quick_metric/ tests/ # (2)!
+make lint # (3)!
 ```
+
+1. Format code automatically according to project standards
+2. Check for linting issues and code quality problems
+3. Run all quality checks using the Makefile (if available)
+
+#### Documentation
+
+```bash
+uv run mkdocs serve # (1)!
+uv run mkdocs build # (2)!
+uv run mkdocs gh-deploy # (3)!
+```
+
+1. Serve documentation locally with live reload for development
+2. Build static documentation files for deployment
+3. Deploy to GitHub Pages (maintainers only)
 
 ## Next Steps
 
-- Explore the [API Reference](api_reference/index.md) for detailed documentation
-- Review specific modules:
-    - [Core Functions](api_reference/core.md) - Main entry points
-    - [Method Definitions](api_reference/method_definitions.md) - Decorator and registry
-    - [Filter](api_reference/filter.md) - Data filtering logic
-    - [Apply Methods](api_reference/apply_methods.md) - Method execution
-    - [Pipeline](api_reference/pipeline.md) - oops-its-a-pipeline integration
-- Check out practical examples in the repository tests
+Now that you have Quick Metric installed, explore these resources:
+
+- **[Usage Guide](usage/index.md)** - Comprehensive guide to all Quick Metric features
+- **[API Reference](api_reference/index.md)** - Detailed API documentation
+- **[Configuration Guide](configuration.md)** - Learn how to write effective YAML configurations

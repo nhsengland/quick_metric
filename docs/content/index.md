@@ -16,6 +16,7 @@ Welcome to **Quick Metric** - a powerful framework for quickly creating metrics 
 
 * **[@metric_method Decorator](api_reference/method_definitions.md)** - Register custom metric functions with a simple decorator
 * **[Core Functions](api_reference/core.md)** - Main entry points: `generate_metrics()` and `interpret_metric_instructions()`
+* **[Multiple Output Formats](usage/nested.md)** - Results as nested dict, pandas DataFrame, or list of records
 * **[Data Filtering](api_reference/filter.md)** - Complex filtering logic with YAML configuration support
 * **[Method Application](api_reference/apply_methods.md)** - Execute methods on filtered data with error handling
 * **[Pipeline Integration](api_reference/pipeline.md)** - Seamless integration with oops-its-a-pipeline workflows
@@ -72,6 +73,24 @@ config = {
 results = generate_metrics(data, config)
 print(results['active_category_a']['count_records'])  # 2
 print(results['active_category_a']['mean_value'])     # 12.5
+```
+
+## Output Formats
+
+Quick Metric supports multiple output formats to suit different use cases:
+
+```python
+# Default nested dictionary format (backward compatible)
+nested_results = generate_metrics(data, config)
+# Returns: {'metric_name': {'method_name': result}}
+
+# DataFrame format (perfect for analysis and visualization)
+df_results = generate_metrics(data, config, output_format="dataframe")
+# Returns: pandas DataFrame with columns [metric, method, value, value_type]
+
+# Records format (ideal for APIs and databases)
+records_results = generate_metrics(data, config, output_format="records")
+# Returns: [{'metric': 'metric_name', 'method': 'method_name', 'value': result}]
 ```
 
 ## Pipeline Integration
