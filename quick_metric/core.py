@@ -82,9 +82,48 @@ from loguru import logger
 import pandas as pd
 import yaml
 
-from quick_metric.apply_methods import apply_methods
-from quick_metric.filter import apply_filter
+from quick_metric._apply_methods import apply_methods
+from quick_metric._filter import apply_filter
+from quick_metric._output_formats import OutputFormat, convert_to_format
 from quick_metric.method_definitions import METRICS_METHODS
+
+
+def _normalize_method_specs(method_input):
+    """
+    Normalize various method specification formats into List[str | dict].
+
+    Handles these input formats:
+    - str: "method_name" -> ["method_name"]
+    - list of str: ["method1", "method2"] -> ["method1", "method2"]
+    - dict: {"method": {"param": "value"}} -> [{"method": {"param": "value"}}]
+    - list of mixed: ["method1", {"method2": {"param": "value"}}] -> unchanged
+
+    Parameters
+    ----------
+    method_input : str | list | dict
+        Method specification in various formats
+
+    Returns
+    -------
+    List[str | dict]
+        Normalized list of method specifications
+    """
+    if isinstance(method_input, str):
+        # Single method name as string
+        return [method_input]
+    if isinstance(method_input, list):
+        # Already a list - validate contents and return
+        for item in method_input:
+            if not isinstance(item, (str, dict)):
+                raise ValueError(f"Method list items must be str or dict, got {type(item)}: {item}")
+        return method_input
+    if isinstance(method_input, dict):
+        # Single method with parameters - convert to list
+        return [method_input]
+
+    raise ValueError(
+        f"Method specification must be str, list, or dict, got {type(method_input)}: {method_input}"
+    )
 
 
 def read_metric_instructions(metric_config_path: Path) -> dict:
@@ -188,11 +227,14 @@ def interpret_metric_instructions(
 
             logger.trace(f"Filtered to {len(filtered_data)} rows")
 
+            # Normalize method specifications to handle various input formats
+            normalized_methods = _normalize_method_specs(metric_instruction["method"])
+
             # Apply methods to filtered data
-            with logger.contextualize(methods=metric_instruction["method"]):
+            with logger.contextualize(methods=normalized_methods):
                 results[metric_name] = apply_methods(
                     data=filtered_data,
-                    method_names=metric_instruction["method"],
+                    method_specs=normalized_methods,
                     metrics_methods=metrics_methods,
                 )
 
@@ -206,7 +248,8 @@ def generate_metrics(
     data: pd.DataFrame,
     config: Union[Path, dict],
     metrics_methods: Optional[dict] = None,
-) -> dict:
+    output_format: Union[str, OutputFormat] = "nested",
+) -> Union[dict, pd.DataFrame, list[dict]]:
     """
     Generate metrics from data using configuration (main entry point).
 
@@ -225,17 +268,23 @@ def generate_metrics(
     metrics_methods : Dict, optional
         Dictionary of available methods. If None, uses the default registered
         methods from METRICS_METHODS.
+    output_format : str or OutputFormat, default "nested"
+        Format for the output. Options:
+        - "nested": Current dict of dicts format {'metric': {'method': result}}
+        - "dataframe": Pandas DataFrame with columns [metric, method, value, value_type]
+        - "records": List of dicts [{'metric': '...', 'method': '...', 'value': ...}]
 
     Returns
     -------
-    Dict
-        Dictionary with metric names as keys and their calculated results
-        as values. Each metric will contain the results of all methods
-        applied to the filtered data.
+    Union[dict, pd.DataFrame, list[dict]]
+        Results in the specified format. The exact type depends on output_format:
+        - dict: When output_format="nested" (default)
+        - pd.DataFrame: When output_format="dataframe"
+        - list[dict]: When output_format="records"
 
     Examples
     --------
-    Using a dictionary configuration:
+    Using a dictionary configuration (default nested format):
 
     >>> import pandas as pd
     >>> from quick_metric import generate_metrics, metric_method
@@ -252,6 +301,17 @@ def generate_metrics(
     ...     }
     ... }
     >>> results = generate_metrics(data, config)
+    >>> # Returns: {'category_a_count': {'count_records': 2}}
+
+    Using DataFrame output format:
+
+    >>> df_results = generate_metrics(data, config, output_format="dataframe")
+    >>> # Returns: DataFrame with columns [metric, method, value, value_type]
+
+    Using records output format:
+
+    >>> records = generate_metrics(data, config, output_format="records")
+    >>> # Returns: [{'metric': 'category_a_count', 'method': 'count_records', 'value': 2}]
 
     Using a YAML file:
 
@@ -266,9 +326,19 @@ def generate_metrics(
     KeyError
         If a YAML file doesn't contain 'metric_instructions' key.
     ValueError
-        If config parameter is not a valid type.
+        If config parameter or output_format is not a valid type.
     """
     logger.info("Starting metric generation")
+
+    # Convert string format to enum
+    if isinstance(output_format, str):
+        try:
+            output_format = OutputFormat(output_format)
+        except ValueError as e:
+            valid_formats = [f.value for f in OutputFormat]
+            raise ValueError(
+                f"Invalid output_format '{output_format}'. Valid options: {valid_formats}"
+            ) from e
 
     # Handle different config input types
     if isinstance(config, Path):
@@ -287,6 +357,11 @@ def generate_metrics(
         metric_instructions=metric_instructions,
         metrics_methods=metrics_methods,
     )
+
+    # Convert to requested format
+    if output_format != OutputFormat.NESTED:
+        logger.debug(f"Converting results to {output_format.value} format")
+        results = convert_to_format(results, output_format)
 
     logger.success("Metric generation completed successfully")
     return results
