@@ -168,27 +168,54 @@ _registry = MetricRegistry()
 METRICS_METHODS = _registry._methods  # Direct reference to internal dict
 
 
-def metric_method(func: Callable) -> Callable:
+def metric_method(func_or_name=None):
     """
-    Decorator to register a user function as a metric method.
+    Decorator to register a user function as a metric method, or query registered methods.
+
+    Can be used in three ways:
+    1. As a decorator: @metric_method
+    2. To get all methods: metric_method()
+    3. To get a specific method: metric_method('method_name')
 
     Parameters
     ----------
-    func : Callable
-        User function to register.
+    func_or_name : Callable or str, optional
+        User function to register when used as decorator, or method name to retrieve.
 
     Returns
     -------
-    Callable
-        The original function, unchanged.
+    Callable or dict
+        When used as decorator: returns the original function unchanged.
+        When called without args: returns dict of all registered methods.
+        When called with method name: returns the specific method.
 
     Examples
     --------
+    As a decorator:
     >>> @metric_method
     ... def my_custom_metric(data):
     ...     return len(data)
+
+    To get all methods:
+    >>> all_methods = metric_method()
+    >>> print(list(all_methods.keys()))
+
+    To get a specific method:
+    >>> my_method = metric_method('my_custom_metric')
     """
-    return _registry.register(func)
+    # Case 1: Called without arguments - return all methods
+    if func_or_name is None:
+        return _registry.get_methods()
+
+    # Case 2: Called with a string - return specific method
+    if isinstance(func_or_name, str):
+        return _registry.get_method(func_or_name)
+
+    # Case 3: Called with a function (decorator usage)
+    if callable(func_or_name):
+        return _registry.register(func_or_name)
+
+    raise ValueError(f"Invalid argument type: {type(func_or_name)}")
 
 
 def get_method(name: str) -> Callable:

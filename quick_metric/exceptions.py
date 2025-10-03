@@ -6,6 +6,7 @@ nhs_herbot.LoggedException to provide clear, actionable error messages
 with automatic logging.
 """
 
+import difflib
 from typing import Optional
 
 from nhs_herbot import LoggedException
@@ -142,5 +143,43 @@ class EmptyRegistryError(MetricMethodError):
             f"Cannot perform {operation} on empty method registry. "
             f"Register some methods first using @metric_method decorator."
         )
+
+        super().__init__(message)
+
+
+class MetricSpecificationError(ValueError, LoggedException):
+    """Exception raised when metric specification is invalid."""
+
+    def __init__(self, specification_issue: str, method_spec=None):
+        self.specification_issue = specification_issue
+        self.method_spec = method_spec
+
+        message = f"Invalid metric specification: {specification_issue}"
+        if method_spec:
+            message += f". Method specification: {method_spec}"
+
+        super().__init__(message)
+
+
+class MetricsMethodNotFoundError(MetricMethodError):
+    """Exception raised when a specified method is not found in metrics methods."""
+
+    def __init__(self, method_name: str, available_methods: list[str]):
+        self.method_name = method_name
+        self.available_methods = available_methods
+
+        methods_list = ", ".join(available_methods) if available_methods else "None"
+        message = (
+            f"Metric method '{method_name}' is not registered. Available methods: {methods_list}"
+        )
+
+        if available_methods:
+            # Use difflib to suggest similar method names
+            close_matches = difflib.get_close_matches(
+                method_name, available_methods, n=3, cutoff=0.4
+            )
+            if close_matches:
+                suggestions = ", ".join(close_matches)
+                message += f". Did you mean one of: {suggestions}?"
 
         super().__init__(message)
