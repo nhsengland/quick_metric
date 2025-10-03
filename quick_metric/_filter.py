@@ -29,7 +29,7 @@ Examples
 Simple equality filter:
 
 >>> import pandas as pd
->>> from quick_metric.filter import apply_filter
+>>> from quick_metric._filter import apply_filter
 >>>
 >>> data = pd.DataFrame({
 ...     'category': ['A', 'B', 'A', 'C'],
