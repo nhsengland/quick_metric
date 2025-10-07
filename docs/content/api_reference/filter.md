@@ -1,3 +1,3 @@
 # Filter
 
-::: quick_metric.filter
+::: quick_metric._filter

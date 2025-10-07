@@ -1,3 +1,3 @@
 # Core Functions
 
-::: quick_metric.core
+::: quick_metric._core

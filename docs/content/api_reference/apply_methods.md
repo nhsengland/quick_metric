@@ -1,3 +1,3 @@
 # Apply Methods
 
-::: quick_metric.apply_methods
+::: quick_metric._apply_methods

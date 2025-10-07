@@ -1,3 +1,3 @@
 # Output Formats
 
-::: quick_metric.output_formats
+::: quick_metric._output_formats

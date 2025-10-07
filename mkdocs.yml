@@ -67,6 +67,7 @@ nav:
     - Filter: api_reference/filter.md
     - Apply Methods: api_reference/apply_methods.md
     - Pipeline Integration: api_reference/pipeline.md
+    - Exceptions: api_reference/exceptions.md
 
 extra_css:
   - stylesheets/nhs_style.css

@@ -1,3 +1,3 @@
 # Method Definitions
 
-::: quick_metric.method_definitions
+::: quick_metric._method_definitions
