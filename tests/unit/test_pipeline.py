@@ -5,15 +5,14 @@ Tests the GenerateMetricsStage and create_metrics_stage function to ensure
 they work correctly with the oops-its-a-pipeline framework.
 """
 
+from oops_its_a_pipeline import PipelineConfig, PipelineContext
+from oops_its_a_pipeline.exceptions import PipelineStageValidationError
 import pandas as pd
 import pytest
 
-from oops_its_a_pipeline import PipelineConfig, PipelineContext
-from oops_its_a_pipeline.exceptions import PipelineStageValidationError
-
-import quick_metric.pipeline as pipeline_module
 from quick_metric._exceptions import RegistryLockError
 from quick_metric._method_definitions import metric_method
+import quick_metric.pipeline as pipeline_module
 from quick_metric.pipeline import (
     GenerateMetricsStage,
     create_metrics_stage,

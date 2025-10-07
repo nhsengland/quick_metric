@@ -2,21 +2,21 @@
 
 import pytest
 
-from quick_metric._method_definitions import (
-    metric_method,
-    get_method,
-    clear_methods,
-    METRICS_METHODS,
-    _registry,
-    list_method_names,
-    get_registered_methods,
-    MetricRegistry,
-)
 from quick_metric._exceptions import (
+    EmptyRegistryError,
     InvalidMethodSignatureError,
     MethodNotFoundError,
-    EmptyRegistryError,
     RegistryLockError,
+)
+from quick_metric._method_definitions import (
+    METRICS_METHODS,
+    MetricRegistry,
+    _registry,
+    clear_methods,
+    get_method,
+    get_registered_methods,
+    list_method_names,
+    metric_method,
 )
 
 
@@ -46,7 +46,7 @@ class TestMetricMethodDecorator:
     def test_decorator_returns_original_function(self):
         """Test that decorator returns the original function unchanged."""
 
-        def original_function(data):
+        def original_function(_data):
             return "original"
 
         decorated_function = metric_method(original_function)
@@ -54,7 +54,7 @@ class TestMetricMethodDecorator:
         assert decorated_function is original_function
 
     @pytest.mark.parametrize(
-        "input_data,expected",
+        ("input_data", "expected"),
         [
             ([1, 2, 3], "processed 3 items"),
             ([1, 2, 3, 4, 5], "processed 5 items"),
@@ -95,11 +95,11 @@ class TestMetricMethodDecorator:
         """Test that multiple decorated functions are registered separately."""
 
         @metric_method
-        def function_one(data):
+        def function_one(_data):
             return 1
 
         @metric_method
-        def function_two(data):
+        def function_two(_data):
             return 2
 
         assert len(METRICS_METHODS) == 2
@@ -175,7 +175,7 @@ class TestComplexFunctionSignatures:
         """Test decorator works with multiple parameter functions."""
 
         @metric_method
-        def multi_param_function(data, column="value", threshold=0):
+        def multi_param_function(data, _column="value", threshold=0):
             return len([x for x in data if x > threshold])
 
         assert "multi_param_function" in METRICS_METHODS
@@ -220,12 +220,12 @@ class TestMethodRegistrationErrors:
         """Test that re-registering a method logs warning but works."""
 
         @metric_method
-        def duplicate_method(data):
+        def duplicate_method(_data):
             return "first"
 
         # Re-register the same method name
         @metric_method
-        def duplicate_method(data):  # noqa: F811
+        def duplicate_method(_data):  # noqa: F811
             return "second"
 
         # Should use the latest registration
@@ -315,7 +315,6 @@ class TestRegistryErrorConditions:
 
     def test_empty_registry_error_for_list_method_names(self):
         """Test EmptyRegistryError is raised when listing methods from empty registry."""
-        from quick_metric._exceptions import EmptyRegistryError
 
         # Clear the registry first
         clear_methods()
@@ -325,7 +324,6 @@ class TestRegistryErrorConditions:
 
     def test_method_signature_validation_error(self):
         """Test InvalidMethodSignatureError for invalid function signatures."""
-        from quick_metric._exceptions import InvalidMethodSignatureError
 
         with pytest.raises(InvalidMethodSignatureError, match="must accept at least one parameter"):
 
@@ -360,7 +358,7 @@ class TestRegistryErrorConditions:
         mock_lock = mocker.MagicMock()
         mock_lock.__enter__.side_effect = RuntimeError("Lock failed")
         mock_lock.__exit__.return_value = None
-        
+
         # Replace the actual lock with our mock
         registry._lock = mock_lock
 
@@ -375,7 +373,7 @@ class TestRegistryErrorConditions:
         mock_lock = mocker.MagicMock()
         mock_lock.__enter__.side_effect = RuntimeError("Lock failed")
         mock_lock.__exit__.return_value = None
-        
+
         # Replace the actual lock with our mock
         registry._lock = mock_lock
 
@@ -390,7 +388,7 @@ class TestRegistryErrorConditions:
         mock_lock = mocker.MagicMock()
         mock_lock.__enter__.side_effect = RuntimeError("Lock failed")
         mock_lock.__exit__.return_value = None
-        
+
         # Replace the actual lock with our mock
         registry._lock = mock_lock
 

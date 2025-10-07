@@ -70,9 +70,7 @@ def healthcare_data():
     """Realistic healthcare dataset for testing workflows."""
     return pd.DataFrame(
         {
-            "raw_local_point_of_delivery_code": (
-                ["TESTREPORT"] * 6 + ["TESTPLATE"] * 2
-            ),
+            "raw_local_point_of_delivery_code": (["TESTREPORT"] * 6 + ["TESTPLATE"] * 2),
             "test_directory_test_method": ["WGS"] * 4 + ["Panel"] * 4,
             "cancer_rare_disease": ["Cancer"] * 4 + ["Rare Disease"] * 4,
             "specialist_test_group_test_code": (

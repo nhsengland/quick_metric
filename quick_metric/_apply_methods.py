@@ -62,7 +62,10 @@ from typing import Any, Callable, Optional
 from loguru import logger
 import pandas as pd
 
-from quick_metric._exceptions import MetricsMethodNotFoundError, MetricSpecificationError
+from quick_metric._exceptions import (
+    MetricsMethodNotFoundError,
+    MetricSpecificationError,
+)
 from quick_metric._method_definitions import METRICS_METHODS
 
 

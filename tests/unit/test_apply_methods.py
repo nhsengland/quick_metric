@@ -4,7 +4,10 @@ import pandas as pd
 import pytest
 
 from quick_metric._apply_methods import apply_method, apply_methods
-from quick_metric._exceptions import MetricsMethodNotFoundError, MetricSpecificationError
+from quick_metric._exceptions import (
+    MetricsMethodNotFoundError,
+    MetricSpecificationError,
+)
 
 
 class TestApplyMethod:
@@ -133,108 +136,6 @@ class TestApplyMethod:
         with pytest.raises(MetricSpecificationError, match="must be str or dict"):
             apply_method(sample_data, method_spec, methods_dict)
 
-    def test_apply_method_with_dict_method_spec_single_param(self, sample_data):
-        """Test apply_method with dict method spec containing single parameter."""
-
-        def param_method(data, column="value"):
-            return data[column].sum()
-
-        methods_dict = {"param_method": param_method}
-        method_spec = {"param_method": {"column": "value"}}
-
-        result_key, result_value = apply_method(sample_data, method_spec, methods_dict)
-
-        assert result_key == "param_method_columnvalue"
-        assert result_value == 15  # sum of [1,2,3,4,5]
-
-    def test_apply_method_with_dict_method_spec_no_params(self, sample_data):
-        """Test apply_method with dict method spec containing empty parameters."""
-
-        def simple_method(data):
-            return len(data)
-
-        methods_dict = {"simple_method": simple_method}
-        method_spec = {"simple_method": {}}
-
-        result_key, result_value = apply_method(sample_data, method_spec, methods_dict)
-
-        assert result_key == "simple_method"
-        assert result_value == 5
-
-    def test_apply_method_with_dict_method_spec_complex_params(self, sample_data):
-        """Test apply_method with dict method spec containing many parameters for hash generation."""
-
-        def complex_method(data, **kwargs):
-            return len(kwargs)
-
-        methods_dict = {"complex_method": complex_method}
-        # Create a method spec with many parameters to trigger hash generation
-        complex_params = {f"param_{i}": f"value_{i}" for i in range(20)}
-        method_spec = {"complex_method": complex_params}
-
-        result_key, result_value = apply_method(sample_data, method_spec, methods_dict)
-
-        assert result_key.startswith("complex_method_")
-        assert len(result_key.split("_")) == 3  # complex_method_{hash}
-        assert result_value == 20
-
-    def test_apply_method_with_invalid_dict_method_spec_multiple_methods(self, sample_data):
-        """Test apply_method raises error for dict with multiple methods."""
-        methods_dict = {"method1": lambda x: 1, "method2": lambda x: 2}
-        method_spec = {"method1": {}, "method2": {}}
-
-        with pytest.raises(MetricSpecificationError, match="exactly one method"):
-            apply_method(sample_data, method_spec, methods_dict)
-
-    def test_apply_method_with_invalid_dict_method_spec_non_dict_params(self, sample_data):
-        """Test apply_method raises error for dict with non-dict parameters."""
-        methods_dict = {"method1": lambda x: 1}
-        method_spec = {"method1": "not_a_dict"}
-
-        with pytest.raises(MetricSpecificationError, match="must be a dictionary"):
-            apply_method(sample_data, method_spec, methods_dict)
-
-    def test_apply_method_with_invalid_method_spec_type(self, sample_data):
-        """Test apply_method raises error for invalid method spec type."""
-        methods_dict = {"method1": lambda x: 1}
-        method_spec = 123  # Invalid type
-
-        with pytest.raises(MetricSpecificationError, match="must be str or dict"):
-            apply_method(sample_data, method_spec, methods_dict)
-
-    def test_apply_method_dict_spec_multiple_methods_error(self, sample_data):
-        """Test error when dict method spec has multiple methods."""
-        methods_dict = {"method1": lambda _: 1, "method2": lambda _: 2}
-        method_spec = {"method1": {}, "method2": {}}
-
-        with pytest.raises(MetricSpecificationError, match="exactly one method"):
-            apply_method(sample_data, method_spec, methods_dict)
-
-    def test_apply_method_dict_spec_non_dict_params_error(self, sample_data):
-        """Test error when dict method spec has non-dict parameters."""
-        methods_dict = {"method1": lambda _: 1}
-        method_spec = {"method1": "not_a_dict"}
-
-        with pytest.raises(MetricSpecificationError, match="must be a dictionary"):
-            apply_method(sample_data, method_spec, methods_dict)
-
-    def test_apply_method_dict_spec_complex_params_hash(self, sample_data):
-        """Test dict method spec with many params triggers hash generation."""
-
-        def complex_method(_data, **kwargs):
-            return len(kwargs)
-
-        methods_dict = {"complex_method": complex_method}
-        # Many parameters to trigger hash generation (>50 chars)
-        complex_params = {f"param_{i}": f"value_{i}" for i in range(10)}
-        method_spec = {"complex_method": complex_params}
-
-        result_key, result_value = apply_method(sample_data, method_spec, methods_dict)
-
-        assert result_key.startswith("complex_method_")
-        assert len(result_key.split("_")) == 3  # method_hash format
-        assert result_value == 10
-
 
 class TestApplyMethods:
     """Test apply_methods function."""
@@ -297,12 +198,12 @@ class TestApplyMethods:
     def test_apply_methods_propagates_apply_method_exceptions(self, sample_data):
         """Test that exceptions from apply_method are propagated."""
 
-        def failing_method(data):
+        def failing_method(_data):
             raise ValueError("Test error")
 
         methods_dict = {"failing_method": failing_method}
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Test error"):
             apply_methods(sample_data, ["failing_method"], methods_dict)
 
     def test_apply_methods_uses_default_methods_when_none_provided(self, sample_data):

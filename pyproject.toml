@@ -40,9 +40,9 @@ docs = [
 ]
 
 [tool.ruff]
-line-length = 100
+line-length = 100  # Restored back to 100
 src = ["quick_metric"]
-include = ["pyproject.toml", "quick_metric/**/*.py"]
+include = ["pyproject.toml", "quick_metric/**/*.py", "tests/**/*.py"]
 
 [tool.ruff.lint]
 extend-select = [
@@ -107,3 +107,8 @@ skip_covered = false
 
 [tool.coverage.html]
 directory = "htmlcov"
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.3.0",
+]

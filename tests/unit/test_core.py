@@ -1,13 +1,17 @@
-"""Test the new generate_metrics function."""
+"""Test core functionality."""
+
+from pathlib import Path
+import tempfile
 
 import pandas as pd
 import pytest
+import yaml
 
 from quick_metric import generate_metrics
 from quick_metric._core import (
+    _normalize_method_specs,
     interpret_metric_instructions,
     read_metric_instructions,
-    _normalize_method_specs,
 )
 
 
@@ -29,7 +33,7 @@ class TestGenerateMetrics:
         assert expected_metric in results
 
     @pytest.mark.parametrize(
-        "metric_name, method_name, expected_value",
+        ("metric_name", "method_name", "expected_value"),
         [
             ("category_a_metrics", "count_records", 3),
             ("category_a_metrics", "sum_values", 30),
@@ -84,7 +88,6 @@ class TestGenerateMetrics:
 
     def test_generate_metrics_non_dict_instructions(self):
         """Test generate_metrics with non-dictionary metric instructions."""
-        from quick_metric._core import interpret_metric_instructions
 
         data = pd.DataFrame({"col": [1, 2, 3]})
 
@@ -116,12 +119,49 @@ class TestGenerateMetrics:
     )
     def test_generate_metrics_invalid_structure(self, config, expected_error):
         """Test generate_metrics with invalid metric instruction structure."""
-        from quick_metric._core import interpret_metric_instructions
 
         data = pd.DataFrame({"col": [1, 2, 3]})
 
         with pytest.raises(ValueError, match=expected_error):
             interpret_metric_instructions(data, config)
+
+    def test_generate_metrics_invalid_output_format(self):
+        """Test generate_metrics with invalid output format string."""
+        data = pd.DataFrame({"col": [1, 2, 3]})
+        config = {"test": {"method": ["count_records"], "filter": {}}}
+
+        with pytest.raises(ValueError, match="Invalid output_format 'invalid_format'"):
+            generate_metrics(data, config, output_format="invalid_format")
+
+    def test_generate_metrics_invalid_config_type_detailed(self):
+        """Test generate_metrics with invalid config type (not Path or dict)."""
+        data = pd.DataFrame({"col": [1, 2, 3]})
+        invalid_config = ["not", "a", "dict", "or", "path"]
+
+        with pytest.raises(ValueError, match="Config must be a pathlib.Path object or dict"):
+            generate_metrics(data, invalid_config)  # type: ignore
+
+    def test_generate_metrics_with_flat_output_format(self):
+        """Test generate_metrics with flat_dataframe output format conversion."""
+        data = pd.DataFrame({"category": ["A", "B"], "value": [10, 20]})
+        config = {"test_metric": {"method": ["count_records"], "filter": {}}}
+
+        result = generate_metrics(data, config, output_format="flat_dataframe")
+
+        # Should be a DataFrame (flat format)
+        assert isinstance(result, pd.DataFrame)
+
+    def test_generate_metrics_with_records_output_format(self):
+        """Test generate_metrics with records output format conversion."""
+        data = pd.DataFrame({"category": ["A", "B"], "value": [10, 20]})
+        config = {"test_metric": {"method": ["count_records"], "filter": {}}}
+
+        result = generate_metrics(data, config, output_format="records")
+
+        # Should be a list of dictionaries
+        assert isinstance(result, list)
+        assert len(result) > 0
+        assert isinstance(result[0], dict)
 
 
 class TestReadMetricInstructions:
@@ -129,8 +169,6 @@ class TestReadMetricInstructions:
 
     def test_read_nonexistent_file(self):
         """Test reading from nonexistent file raises FileNotFoundError."""
-        from pathlib import Path
-        from quick_metric._core import read_metric_instructions
 
         nonexistent_path = Path("/nonexistent/path/config.yaml")
 
@@ -139,59 +177,49 @@ class TestReadMetricInstructions:
 
         assert "Configuration file not found" in str(exc_info.value)
 
-    def test_read_invalid_yaml(self):
-        """Test reading invalid YAML raises ValueError."""
-        import tempfile
-        from pathlib import Path
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write("invalid: yaml: content: [")  # Invalid YAML
-            temp_path = Path(f.name)
+    def test_invalid_yaml_raises_syntax_error(self):
+        """Test that invalid YAML raises a ValueError."""
+        # Create a temporary file with invalid YAML content
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as temp_file:
+            temp_file.write("invalid: yaml: content: [")
+            temp_file_path = Path(temp_file.name)
 
         try:
-            with pytest.raises(ValueError) as exc_info:
-                read_metric_instructions(temp_path)
-
-            assert "Invalid YAML in configuration file" in str(exc_info.value)
+            with pytest.raises(ValueError, match="Invalid YAML in configuration file"):
+                read_metric_instructions(temp_file_path)
         finally:
-            temp_path.unlink()  # Clean up
+            # Clean up
+            temp_file_path.unlink()
 
     def test_read_non_dict_yaml(self):
-        """Test reading YAML that's not a dict raises ValueError."""
-        import tempfile
-        import yaml
-        from pathlib import Path
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            yaml.dump(["list", "instead", "of", "dict"], f)
-            temp_path = Path(f.name)
+        """Test reading from file that contains non-dict YAML raises ValueError."""
+        # Create a temporary file with list content
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as temp_file:
+            yaml.dump([1, 2, 3], temp_file)
+            temp_file_path = Path(temp_file.name)
 
         try:
-            with pytest.raises(ValueError) as exc_info:
-                read_metric_instructions(temp_path)
-
-            assert "Configuration file must contain a YAML dictionary" in str(exc_info.value)
+            with pytest.raises(
+                ValueError, match="Configuration file must contain a YAML dictionary"
+            ):
+                read_metric_instructions(temp_file_path)
         finally:
-            temp_path.unlink()  # Clean up
+            # Clean up
+            temp_file_path.unlink()
 
     def test_read_empty_metric_instructions(self):
-        """Test reading YAML with no metric_instructions logs warning."""
-        import tempfile
-        import yaml
-        from pathlib import Path
-
-        config_data = {"some_other_key": "value"}
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            yaml.dump(config_data, f)
-            temp_path = Path(f.name)
+        """Test reading empty metric instructions returns empty dict."""
+        # Create a temporary file with empty dict
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as temp_file:
+            yaml.dump({}, temp_file)
+            temp_file_path = Path(temp_file.name)
 
         try:
-            # This should return empty dict and log warning
-            result = read_metric_instructions(temp_path)
+            result = read_metric_instructions(temp_file_path)
             assert result == {}
         finally:
-            temp_path.unlink()  # Clean up
+            # Clean up
+            temp_file_path.unlink()
 
 
 class TestInterpretMetricInstructions:
@@ -199,7 +227,6 @@ class TestInterpretMetricInstructions:
 
     def test_empty_instructions(self):
         """Test with empty metric instructions."""
-        from quick_metric._core import interpret_metric_instructions
 
         data = pd.DataFrame({"col": [1, 2, 3]})
 
@@ -208,7 +235,6 @@ class TestInterpretMetricInstructions:
 
     def test_with_custom_metrics_methods(self):
         """Test interpret_metric_instructions with custom methods dict."""
-        from quick_metric._core import interpret_metric_instructions
 
         def custom_method(data):
             return len(data) * 2

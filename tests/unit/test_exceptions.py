@@ -16,8 +16,8 @@ from quick_metric._exceptions import (
     MethodRegistrationError,
     MethodValidationError,
     MetricMethodError,
-    MetricSpecificationError,
     MetricsMethodNotFoundError,
+    MetricSpecificationError,
     RegistryLockError,
 )
 
@@ -323,7 +323,7 @@ class TestMetricsMethodNotFoundError:
 
         assert error.method_name == "missing_method"
         assert error.available_methods == available
-        
+
         error_msg = str(error)
         assert "Metric method 'missing_method' is not registered" in error_msg
         assert "Available methods: method_a, method_b, method_c" in error_msg
