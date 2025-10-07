@@ -80,12 +80,22 @@ method_definitions : Core decorator for registering metric methods
 core : Main metric generation functionality
 """
 
-from quick_metric.core import generate_metrics
-from quick_metric.method_definitions import metric_method
+from quick_metric._core import generate_metrics
+from quick_metric._method_definitions import (
+    clear_methods,
+    get_method,
+    get_registered_methods,
+    list_method_names,
+    metric_method,
+)
 
-__version__ = "0.0.1"
+__version__ = "1.0.0"
 
 __all__ = [
     "generate_metrics",
     "metric_method",
+    "get_method",
+    "get_registered_methods",
+    "list_method_names",
+    "clear_methods",
 ]
