@@ -4,7 +4,11 @@ import pandas as pd
 import pytest
 
 from quick_metric import generate_metrics
-from quick_metric.core import interpret_metric_instructions, read_metric_instructions
+from quick_metric._core import (
+    interpret_metric_instructions,
+    read_metric_instructions,
+    _normalize_method_specs,
+)
 
 
 class TestGenerateMetrics:
@@ -80,7 +84,7 @@ class TestGenerateMetrics:
 
     def test_generate_metrics_non_dict_instructions(self):
         """Test generate_metrics with non-dictionary metric instructions."""
-        from quick_metric.core import interpret_metric_instructions
+        from quick_metric._core import interpret_metric_instructions
 
         data = pd.DataFrame({"col": [1, 2, 3]})
 
@@ -112,7 +116,7 @@ class TestGenerateMetrics:
     )
     def test_generate_metrics_invalid_structure(self, config, expected_error):
         """Test generate_metrics with invalid metric instruction structure."""
-        from quick_metric.core import interpret_metric_instructions
+        from quick_metric._core import interpret_metric_instructions
 
         data = pd.DataFrame({"col": [1, 2, 3]})
 
@@ -126,7 +130,7 @@ class TestReadMetricInstructions:
     def test_read_nonexistent_file(self):
         """Test reading from nonexistent file raises FileNotFoundError."""
         from pathlib import Path
-        from quick_metric.core import read_metric_instructions
+        from quick_metric._core import read_metric_instructions
 
         nonexistent_path = Path("/nonexistent/path/config.yaml")
 
@@ -195,7 +199,7 @@ class TestInterpretMetricInstructions:
 
     def test_empty_instructions(self):
         """Test with empty metric instructions."""
-        from quick_metric.core import interpret_metric_instructions
+        from quick_metric._core import interpret_metric_instructions
 
         data = pd.DataFrame({"col": [1, 2, 3]})
 
@@ -204,7 +208,7 @@ class TestInterpretMetricInstructions:
 
     def test_with_custom_metrics_methods(self):
         """Test interpret_metric_instructions with custom methods dict."""
-        from quick_metric.core import interpret_metric_instructions
+        from quick_metric._core import interpret_metric_instructions
 
         def custom_method(data):
             return len(data) * 2
@@ -219,3 +223,40 @@ class TestInterpretMetricInstructions:
 
         # Should have 2 rows with category "A", so custom_method returns 2 * 2 = 4
         assert result["test_metric"]["custom_method"] == 4
+
+
+class TestNormalizeMethodSpecs:
+    """Test cases for the _normalize_method_specs function."""
+
+    def test_normalize_method_specs_with_invalid_list_item(self):
+        """Test _normalize_method_specs with invalid item in list."""
+        # List with invalid item type
+        invalid_method_input = ["valid_method", 123]  # 123 is invalid
+
+        with pytest.raises(ValueError, match="Method list items must be str or dict"):
+            _normalize_method_specs(invalid_method_input)
+
+    def test_normalize_method_specs_with_invalid_type(self):
+        """Test _normalize_method_specs with completely invalid type."""
+        # Invalid type (not str, list, or dict)
+        invalid_method_input = 123
+
+        with pytest.raises(ValueError, match="Method specification must be str, list, or dict"):
+            _normalize_method_specs(invalid_method_input)
+
+    def test_normalize_method_specs_with_valid_string(self):
+        """Test _normalize_method_specs with valid string."""
+        result = _normalize_method_specs("test_method")
+        assert result == ["test_method"]
+
+    def test_normalize_method_specs_with_valid_list(self):
+        """Test _normalize_method_specs with valid list."""
+        method_input = ["method1", {"method2": {"param": "value"}}]
+        result = _normalize_method_specs(method_input)
+        assert result == ["method1", {"method2": {"param": "value"}}]
+
+    def test_normalize_method_specs_with_valid_dict(self):
+        """Test _normalize_method_specs with valid dict."""
+        method_input = {"test_method": {"param": "value"}}
+        result = _normalize_method_specs(method_input)
+        assert result == [{"test_method": {"param": "value"}}]

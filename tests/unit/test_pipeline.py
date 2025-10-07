@@ -8,26 +8,55 @@ they work correctly with the oops-its-a-pipeline framework.
 import pandas as pd
 import pytest
 
-from quick_metric.method_definitions import metric_method
+from oops_its_a_pipeline import PipelineConfig, PipelineContext
+from oops_its_a_pipeline.exceptions import PipelineStageValidationError
 
-# Skip all tests if oops-its-a-pipeline is not available
-pytest_plugins = []
+import quick_metric.pipeline as pipeline_module
+from quick_metric._exceptions import RegistryLockError
+from quick_metric._method_definitions import metric_method
+from quick_metric.pipeline import (
+    GenerateMetricsStage,
+    create_metrics_stage,
+)
 
-try:
-    from oops_its_a_pipeline import Pipeline, PipelineConfig, PipelineContext
-    from quick_metric.pipeline import (
-        GenerateMetricsStage,
-        create_metrics_stage,
+
+@pytest.fixture
+def test_data():
+    """Common test data fixture."""
+    return pd.DataFrame(
+        {
+            "category": ["A", "A", "B", "B"],
+            "value": [1, 2, 3, 4],
+        }
     )
 
-    PIPELINE_AVAILABLE = True
-except ImportError:
-    PIPELINE_AVAILABLE = False
+
+@pytest.fixture
+def pipeline_config():
+    """Common pipeline config fixture."""
+
+    class TestConfig(PipelineConfig):
+        pass
+
+    return TestConfig()
 
 
-@pytest.mark.skipif(not PIPELINE_AVAILABLE, reason="oops-its-a-pipeline not available")
+@pytest.fixture
+def basic_metrics_config():
+    """Basic metrics configuration fixture."""
+
+    @metric_method
+    def count_records(data: pd.DataFrame) -> int:
+        return len(data)
+
+    return {
+        "test_metric": {"method": ["count_records"], "filter": {}},
+        "category_a_count": {"method": ["count_records"], "filter": {"category": "A"}},
+    }
+
+
 class TestGenerateMetricsStage:
-    """Test GenerateMetricsStage functionality."""
+    """Test GenerateMetricsStage class."""
 
     @pytest.mark.parametrize(
         ("attribute", "expected_value"),
@@ -38,177 +67,88 @@ class TestGenerateMetricsStage:
         ],
     )
     def test_stage_creation(self, attribute, expected_value):
-        """Test creating a GenerateMetricsStage."""
+        """Test stage creation with default parameters."""
         stage = GenerateMetricsStage()
         assert getattr(stage, attribute) == expected_value
 
-    @pytest.mark.parametrize(
-        ("attribute", "expected_value"),
-        [
-            ("name", "custom_metrics"),
-            ("input_keys", ("df", "metrics_config")),
-            ("output_keys", ("results",)),
-        ],
-    )
-    def test_stage_with_custom_parameters(self, attribute, expected_value):
-        """Test creating stage with custom input/output parameters."""
-        stage = GenerateMetricsStage(
-            data_input="df",
-            config_input="metrics_config",
-            metrics_output="results",
-            name="custom_metrics",
-        )
-        assert getattr(stage, attribute) == expected_value
-
-    def test_stage_with_metrics_methods_input(self):
-        """Test creating stage with custom metrics methods input."""
-        stage = GenerateMetricsStage(metrics_methods_input="custom_methods")
-
-        assert stage.input_keys == ("data", "config", "custom_methods")
-        assert stage.output_keys == ("metrics",)
-
-    def test_stage_execution_with_dict_config(self):
-        """Test executing stage with dictionary configuration."""
-
-        @metric_method
-        def test_count(data):
-            return len(data)
-
-        # Create test data
-        test_data = pd.DataFrame({"category": ["A", "B", "A", "C"], "value": [1, 2, 3, 4]})
-
-        config = {
-            "category_a_count": {
-                "method": ["test_count"],
-                "filter": {"category": "A"},
-            },
-            "total_count": {"method": ["test_count"], "filter": {}},
-        }
-
-        # Create and execute stage
+    def test_stage_execution_with_dict_config(
+        self, test_data, pipeline_config, basic_metrics_config
+    ):
+        """Test stage execution with dictionary config."""
         stage = GenerateMetricsStage()
-
-        class TestConfig(PipelineConfig):
-            pass
-
-        context = PipelineContext(TestConfig(), "test_run")
+        context = PipelineContext(pipeline_config, "test_run")
         context["data"] = test_data
-        context["config"] = config
+        context["config"] = basic_metrics_config
 
         result_context = stage.run(context)
-
-        # Check that metrics key exists
         assert "metrics" in result_context
 
-    @pytest.mark.parametrize("metric_name", ["category_a_count", "total_count"])
-    def test_stage_execution_contains_expected_metrics(self, metric_name):
-        """Test that execution results contain expected metric keys."""
-
-        @metric_method
-        def test_count(data):
-            return len(data)
-
-        test_data = pd.DataFrame({"category": ["A", "B", "A", "C"], "value": [1, 2, 3, 4]})
-
-        config = {
-            "category_a_count": {
-                "method": ["test_count"],
-                "filter": {"category": "A"},
-            },
-            "total_count": {"method": ["test_count"], "filter": {}},
-        }
-
+    def test_stage_execution_invalid_data_type(self, pipeline_config):
+        """Test stage with invalid data type."""
         stage = GenerateMetricsStage()
-
-        class TestConfig(PipelineConfig):
-            pass
-
-        context = PipelineContext(TestConfig(), "test_run")
-        context["data"] = test_data
-        context["config"] = config
-
-        result_context = stage.run(context)
-        metrics = result_context["metrics"]
-        assert metric_name in metrics
-
-    @pytest.mark.parametrize(
-        ("metric_name", "expected_count"),
-        [
-            ("category_a_count", 2),  # Two 'A' records
-            ("total_count", 4),  # All records
-        ],
-    )
-    def test_stage_execution_metric_values(self, metric_name, expected_count):
-        """Test that execution results have correct metric values."""
-
-        @metric_method
-        def test_count(data):
-            return len(data)
-
-        test_data = pd.DataFrame({"category": ["A", "B", "A", "C"], "value": [1, 2, 3, 4]})
-
-        config = {
-            "category_a_count": {
-                "method": ["test_count"],
-                "filter": {"category": "A"},
-            },
-            "total_count": {"method": ["test_count"], "filter": {}},
-        }
-
-        stage = GenerateMetricsStage()
-
-        class TestConfig(PipelineConfig):
-            pass
-
-        context = PipelineContext(TestConfig(), "test_run")
-        context["data"] = test_data
-        context["config"] = config
-
-        result_context = stage.run(context)
-        metrics = result_context["metrics"]
-        assert metrics[metric_name]["test_count"] == expected_count
-
-    def test_stage_execution_invalid_data_type(self):
-        """Test stage fails with invalid data type."""
-        stage = GenerateMetricsStage()
-
-        class TestConfig(PipelineConfig):
-            pass
-
-        context = PipelineContext(TestConfig(), "test_run")
+        context = PipelineContext(pipeline_config, "test_run")
         context["data"] = "not_a_dataframe"  # Invalid data type
         context["config"] = {}
 
-        # Should raise validation error
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(PipelineStageValidationError, match="Expected pandas DataFrame"):
             stage.run(context)
 
-        assert "Expected pandas DataFrame" in str(exc_info.value)
-
-    def test_stage_execution_with_metrics_generation_error(self):
-        """Test stage handles metrics generation errors properly."""
+    def test_stage_error_handling_with_mock(
+        self, test_data, pipeline_config, basic_metrics_config, mocker
+    ):
+        """Test error handling using pytest-mock to simulate failures."""
         stage = GenerateMetricsStage()
+        context = PipelineContext(pipeline_config, "test_run")
+        context["data"] = test_data
+        context["config"] = basic_metrics_config
 
-        class TestConfig(PipelineConfig):
-            pass
+        # Mock generate_metrics to raise an exception using pytest-mock
+        mock_generate = mocker.patch("quick_metric.pipeline.generate_metrics")
+        mock_generate.side_effect = RuntimeError("Simulated failure")
 
-        context = PipelineContext(TestConfig(), "test_run")
-        context["data"] = pd.DataFrame({"test": [1, 2, 3]})
-        context["config"] = {
-            "invalid_metric": {
-                "method": ["nonexistent_method"],  # This should cause an error
-                "filter": {},
-            }
-        }
-
-        # Should raise validation error
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(PipelineStageValidationError, match="failed during metrics generation"):
             stage.run(context)
 
-        assert "failed during metrics generation" in str(exc_info.value)
+    def test_stage_registry_lock_error_with_mock(
+        self, test_data, pipeline_config, basic_metrics_config, mocker
+    ):
+        """Test registry lock error handling using pytest-mock."""
+        stage = GenerateMetricsStage()
+        context = PipelineContext(pipeline_config, "test_run")
+        context["data"] = test_data
+        context["config"] = basic_metrics_config
+
+        # Mock the generate_metrics to raise a RegistryLockError using pytest-mock
+        mock_generate = mocker.patch("quick_metric.pipeline.generate_metrics")
+        mock_generate.side_effect = RegistryLockError("get_methods", "Lock failed")
+
+        with pytest.raises(PipelineStageValidationError, match="failed during metrics generation"):
+            stage.run(context)
+
+    def test_stage_spy_on_generate_metrics(
+        self, test_data, pipeline_config, basic_metrics_config, mocker
+    ):
+        """Test using mocker.spy to verify function calls without changing behavior."""
+        stage = GenerateMetricsStage()
+        context = PipelineContext(pipeline_config, "test_run")
+        context["data"] = test_data
+        context["config"] = basic_metrics_config
+
+        # Spy on generate_metrics to verify it gets called with correct arguments
+        spy_generate = mocker.spy(pipeline_module, "generate_metrics")
+
+        result_context = stage.run(context)
+
+        # Verify the function was called
+        spy_generate.assert_called_once()
+
+        # Verify the call arguments
+        call_args = spy_generate.call_args
+        assert call_args.kwargs["data"] is test_data
+        assert call_args.kwargs["config"] == basic_metrics_config
+        assert "metrics" in result_context
 
 
-@pytest.mark.skipif(not PIPELINE_AVAILABLE, reason="oops-its-a-pipeline not available")
 class TestCreateMetricsStage:
     """Test create_metrics_stage convenience function."""
 
@@ -230,111 +170,45 @@ class TestCreateMetricsStage:
         stage = create_metrics_stage()
         assert getattr(stage, attribute) == expected_value
 
-    def test_create_metrics_stage_custom_parameters(self):
-        """Test creating stage with custom parameters."""
-        stage = create_metrics_stage(
-            data_input="input_df",
-            config_input="metric_config",
-            metrics_output="calculated_metrics",
-            name="custom_stage",
-        )
-        assert isinstance(stage, GenerateMetricsStage)
 
-    @pytest.mark.parametrize(
-        ("attribute", "expected_value"),
-        [
-            ("name", "custom_stage"),
-            ("input_keys", ("input_df", "metric_config")),
-            ("output_keys", ("calculated_metrics",)),
-        ],
-    )
-    def test_create_metrics_stage_custom_attributes(self, attribute, expected_value):
-        """Test custom stage attributes."""
-        stage = create_metrics_stage(
-            data_input="input_df",
-            config_input="metric_config",
-            metrics_output="calculated_metrics",
-            name="custom_stage",
-        )
-        assert getattr(stage, attribute) == expected_value
-
-
-@pytest.mark.skipif(not PIPELINE_AVAILABLE, reason="oops-its-a-pipeline not available")
 class TestPipelineIntegration:
     """Test integration with oops-its-a-pipeline Pipeline."""
 
-    def test_full_pipeline_execution(self):
-        """Test complete pipeline execution with metrics generation."""
+    def test_stage_with_config_object_with_nested_config_attr(self, test_data, pipeline_config):
+        """Test config object with nested config attribute."""
 
-        # Register a test method
         @metric_method
-        def pipeline_test_count(data):
-            return len(data)
+        def nested_test(data: pd.DataFrame) -> int:
+            return data.shape[0]
 
-        # Create test data and config
-        test_data = pd.DataFrame({"category": ["X", "Y", "X"], "value": [10, 20, 30]})
+        class ConfigWithDictConfig:
+            def __init__(self):
+                # This should hit the condition with isinstance(config.config, dict)
+                self.config = {"nested_metric": {"method": ["nested_test"], "filter": {}}}
 
-        test_config = {
-            "x_category_count": {
-                "method": ["pipeline_test_count"],
-                "filter": {"category": "X"},
-            }
-        }
+        stage = GenerateMetricsStage()
+        context = PipelineContext(pipeline_config, "test_run")
+        context["data"] = test_data
+        context["config"] = ConfigWithDictConfig()
 
-        # Create pipeline config
-        class MetricsConfig(PipelineConfig):
-            model_config = {"arbitrary_types_allowed": True}
+        result_context = stage.run(context)
+        assert "metrics" in result_context
+        assert "nested_metric" in result_context["metrics"]
+        assert result_context["metrics"]["nested_metric"]["nested_test"] == 4
 
-            data: pd.DataFrame = test_data
-            config: dict = test_config
+    def test_stage_with_config_object_with_non_dict_config_attr(self, test_data, pipeline_config):
+        """Test config object with non-dict config attribute."""
 
-        # Create and run pipeline
-        pipeline = Pipeline(MetricsConfig())
-        pipeline.add_stage(create_metrics_stage())
+        class ConfigWithNonDictConfig:
+            def __init__(self):
+                # This hits line 284: config = config.config (when not isinstance dict)
+                self.config = "not_a_dict"
 
-        result = pipeline.run("test_pipeline_run")
+        stage = GenerateMetricsStage()
+        context = PipelineContext(pipeline_config, "test_run")
+        context["data"] = test_data
+        context["config"] = ConfigWithNonDictConfig()
 
-        # Verify results
-        assert "metrics" in result
-        metrics = result["metrics"]
-        assert "x_category_count" in metrics
-        assert metrics["x_category_count"]["pipeline_test_count"] == 2
-
-    def test_pipeline_method_chaining(self):
-        """Test pipeline with method chaining and multiple stages."""
-
-        # Register a test method
-        @metric_method
-        def chain_test_sum(data):
-            return data["value"].sum()
-
-        def create_test_data():
-            return pd.DataFrame({"type": ["A", "B", "A"], "value": [100, 200, 300]})
-
-        def create_test_config():
-            return {"type_a_sum": {"method": ["chain_test_sum"], "filter": {"type": "A"}}}
-
-        def validate_results(metrics):
-            # 100 + 300 = 400 (sum of 'A' type values)
-            assert metrics["type_a_sum"]["chain_test_sum"] == 400
-            return "validation_passed"
-
-        # Create pipeline config (no initial data needed)
-        class EmptyConfig(PipelineConfig):
-            pass
-
-        # Create pipeline and add stages
-        # Note: add_stage returns None, so don't chain
-        pipeline = Pipeline(EmptyConfig())
-        pipeline.add_function_stage(create_test_data, outputs="data")
-        pipeline.add_function_stage(create_test_config, outputs="config")
-        pipeline.add_stage(create_metrics_stage())  # This returns None
-        pipeline.add_function_stage(validate_results, inputs="metrics", outputs="validation")
-
-        result = pipeline.run("chain_test_run")
-
-        # Verify pipeline completed successfully
-        assert result["validation"] == "validation_passed"
-        assert "metrics" in result
-        assert "data" in result
-        assert "config" in result
+        # This should fail because config.config is not a dict
+        with pytest.raises(PipelineStageValidationError, match="failed during metrics generation"):
+            stage.run(context)

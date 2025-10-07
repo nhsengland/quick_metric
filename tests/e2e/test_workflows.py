@@ -2,8 +2,8 @@
 
 import pytest
 
-from quick_metric.core import interpret_metric_instructions
-from quick_metric.method_definitions import _registry, list_method_names, metric_method
+from quick_metric._core import interpret_metric_instructions
+from quick_metric._method_definitions import _registry, list_method_names, metric_method
 
 
 class TestCompleteWorkflow:

@@ -2,18 +2,21 @@
 
 import pytest
 
-from quick_metric.method_definitions import (
+from quick_metric._method_definitions import (
     metric_method,
     get_method,
     clear_methods,
     METRICS_METHODS,
     _registry,
     list_method_names,
+    get_registered_methods,
+    MetricRegistry,
 )
-from quick_metric.exceptions import (
+from quick_metric._exceptions import (
     InvalidMethodSignatureError,
     MethodNotFoundError,
     EmptyRegistryError,
+    RegistryLockError,
 )
 
 
@@ -305,3 +308,91 @@ class TestMethodRegistrationErrors:
             return sum(data)
 
         assert "new_method" in METRICS_METHODS
+
+
+class TestRegistryErrorConditions:
+    """Test error conditions and edge cases for the registry."""
+
+    def test_empty_registry_error_for_list_method_names(self):
+        """Test EmptyRegistryError is raised when listing methods from empty registry."""
+        from quick_metric._exceptions import EmptyRegistryError
+
+        # Clear the registry first
+        clear_methods()
+
+        with pytest.raises(EmptyRegistryError, match="empty method registry"):
+            list_method_names()
+
+    def test_method_signature_validation_error(self):
+        """Test InvalidMethodSignatureError for invalid function signatures."""
+        from quick_metric._exceptions import InvalidMethodSignatureError
+
+        with pytest.raises(InvalidMethodSignatureError, match="must accept at least one parameter"):
+
+            @metric_method
+            def invalid_function():  # No parameters
+                return "invalid"
+
+    def test_get_registered_methods_returns_copy(self):
+        """Test that get_registered_methods returns a copy of the registry."""
+        # Clear and add a test method
+        clear_methods()
+
+        @metric_method
+        def copy_test_method(data):
+            return len(data)
+
+        methods_copy = get_registered_methods()
+
+        # Modify the copy - should not affect the original registry
+        methods_copy["new_fake_method"] = lambda x: x
+
+        # Original registry should be unchanged
+        original_methods = get_registered_methods()
+        assert "new_fake_method" not in original_methods
+        assert "copy_test_method" in original_methods
+
+    def test_registry_lock_error_on_get_methods(self, mocker):
+        """Test RegistryLockError when lock fails on get_methods."""
+        registry = MetricRegistry()
+
+        # Mock the lock's __enter__ method to raise an exception using pytest-mock
+        mock_lock = mocker.MagicMock()
+        mock_lock.__enter__.side_effect = RuntimeError("Lock failed")
+        mock_lock.__exit__.return_value = None
+        
+        # Replace the actual lock with our mock
+        registry._lock = mock_lock
+
+        with pytest.raises(RegistryLockError, match="get_methods"):
+            registry.get_methods()
+
+    def test_registry_lock_error_on_list_method_names(self, mocker):
+        """Test RegistryLockError when lock fails on list_method_names."""
+        registry = MetricRegistry()
+
+        # Mock the lock's __enter__ method to raise an exception using pytest-mock
+        mock_lock = mocker.MagicMock()
+        mock_lock.__enter__.side_effect = RuntimeError("Lock failed")
+        mock_lock.__exit__.return_value = None
+        
+        # Replace the actual lock with our mock
+        registry._lock = mock_lock
+
+        with pytest.raises(RegistryLockError, match="list_method_names"):
+            registry.list_method_names()
+
+    def test_registry_lock_error_on_clear(self, mocker):
+        """Test RegistryLockError when lock fails on clear."""
+        registry = MetricRegistry()
+
+        # Mock the lock's __enter__ method to raise an exception using pytest-mock
+        mock_lock = mocker.MagicMock()
+        mock_lock.__enter__.side_effect = RuntimeError("Lock failed")
+        mock_lock.__exit__.return_value = None
+        
+        # Replace the actual lock with our mock
+        registry._lock = mock_lock
+
+        with pytest.raises(RegistryLockError, match="clear"):
+            registry.clear()

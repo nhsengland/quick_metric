@@ -4,11 +4,11 @@ import pandas as pd
 import pytest
 import yaml
 
-from quick_metric.core import (
+from quick_metric._core import (
     interpret_metric_instructions,
     read_metric_instructions,
 )
-from quick_metric.method_definitions import metric_method
+from quick_metric._method_definitions import metric_method
 
 
 # Test helper methods - only registered when running tests
