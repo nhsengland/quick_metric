@@ -80,9 +80,9 @@ With custom methods:
 
 See Also
 --------
-quick_metric.core.generate_metrics : Core metrics generation function
+quick_metric._core.generate_metrics : Core metrics generation function
 oops_its_a_pipeline.PipelineStage : Base pipeline stage class
-quick_metric.method_definitions : Method registration system
+quick_metric._method_definitions : Method registration system
 """
 
 from pathlib import Path
@@ -93,7 +93,7 @@ from oops_its_a_pipeline import PipelineStage
 from oops_its_a_pipeline.exceptions import PipelineStageValidationError
 import pandas as pd
 
-from quick_metric.core import generate_metrics
+from quick_metric._core import generate_metrics
 
 
 class GenerateMetricsStage(PipelineStage):
@@ -202,7 +202,7 @@ class GenerateMetricsStage(PipelineStage):
     See Also
     --------
     create_metrics_stage : Convenience factory function
-    quick_metric.core.generate_metrics : Underlying metrics function
+    quick_metric._core.generate_metrics : Underlying metrics function
     oops_its_a_pipeline.PipelineStage : Base class
     """
 
@@ -270,36 +270,36 @@ class GenerateMetricsStage(PipelineStage):
         """
         logger.debug(f"Executing {self.name} stage")
 
-        # Extract inputs from context
-        data = context[self.data_input]
-        config = context[self.config_input]
-
-        # Handle different config types - extract dict if it's a config object
-        if hasattr(config, "config") and isinstance(config.config, dict):
-            config = config.config
-        elif hasattr(config, "__dict__") and not isinstance(config, (dict, Path)):
-            # If it's a config object, try to extract the config attribute
-            if hasattr(config, "config"):
-                config = config.config
-            else:
-                error_msg = f"Config object must have 'config' attribute, got {type(config)}"
-                raise ValueError(error_msg)
-
-        # Validate data input
-        if not isinstance(data, pd.DataFrame):
-            raise PipelineStageValidationError(
-                f"Stage '{self.name}': Expected pandas DataFrame for "
-                f"'{self.data_input}', got {type(data)}"
-            )
-
-        # Get optional metrics methods
-        metrics_methods = None
-        if self.metrics_methods_input:
-            metrics_methods = context.get(self.metrics_methods_input)
-
-        logger.info(f"Generating metrics for DataFrame with {len(data)} rows")
-
         try:
+            # Extract inputs from context
+            data = context[self.data_input]
+            config = context[self.config_input]
+
+            # Handle different config types - extract dict if it's a config object
+            if hasattr(config, "config") and isinstance(config.config, dict):
+                config = config.config
+            elif hasattr(config, "__dict__") and not isinstance(config, (dict, Path)):
+                # If it's a config object, try to extract the config attribute
+                if hasattr(config, "config"):
+                    config = config.config
+                else:
+                    error_msg = f"Config object must have 'config' attribute, got {type(config)}"
+                    raise ValueError(error_msg)
+
+            # Validate data input
+            if not isinstance(data, pd.DataFrame):
+                raise PipelineStageValidationError(
+                    f"Stage '{self.name}': Expected pandas DataFrame for "
+                    f"'{self.data_input}', got {type(data)}"
+                )
+
+            # Get optional metrics methods
+            metrics_methods = None
+            if self.metrics_methods_input:
+                metrics_methods = context.get(self.metrics_methods_input)
+
+            logger.info(f"Generating metrics for DataFrame with {len(data)} rows")
+
             # Generate metrics using the core function
             results = generate_metrics(data=data, config=config, metrics_methods=metrics_methods)
 
@@ -308,6 +308,9 @@ class GenerateMetricsStage(PipelineStage):
 
             logger.success(f"Generated {len(results)} metrics successfully")
 
+        except PipelineStageValidationError:
+            # Re-raise pipeline-specific validation errors
+            raise
         except Exception as error:
             logger.error(f"Metrics generation failed: {str(error)}")
             raise PipelineStageValidationError(
@@ -428,9 +431,9 @@ def create_metrics_stage(
     See Also
     --------
     GenerateMetricsStage : The underlying stage class
-    quick_metric.core.generate_metrics : Core metrics generation function
+    quick_metric._core.generate_metrics : Core metrics generation function
     oops_its_a_pipeline.Pipeline : Pipeline construction
-    quick_metric.method_definitions.metric_method : Method registration
+    quick_metric._method_definitions.metric_method : Method registration
     """
     return GenerateMetricsStage(
         data_input=data_input,

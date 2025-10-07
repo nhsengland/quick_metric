@@ -29,7 +29,7 @@ Examples
 Load configuration from YAML file:
 
 >>> from pathlib import Path
->>> from quick_metric.core import read_metric_instructions
+>>> from quick_metric._core import read_metric_instructions
 >>>
 >>> config_path = Path('metrics.yaml')
 >>> instructions = read_metric_instructions(config_path)
@@ -37,8 +37,8 @@ Load configuration from YAML file:
 Execute complete workflow:
 
 >>> import pandas as pd
->>> from quick_metric.core import interpret_metric_instructions
->>> from quick_metric.method_definitions import metric_method
+>>> from quick_metric._core import interpret_metric_instructions
+>>> from quick_metric._method_definitions import metric_method
 >>>
 >>> @metric_method
 ... def count_records(data):
@@ -84,8 +84,8 @@ import yaml
 
 from quick_metric._apply_methods import apply_methods
 from quick_metric._filter import apply_filter
+from quick_metric._method_definitions import METRICS_METHODS
 from quick_metric._output_formats import OutputFormat, convert_to_format
-from quick_metric.method_definitions import METRICS_METHODS
 
 
 def _normalize_method_specs(method_input):

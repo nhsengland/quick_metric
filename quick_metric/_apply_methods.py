@@ -25,7 +25,7 @@ Apply a single method:
 
     Examples:
         >>> import pandas as pd
-        >>> from quick_metric.method_definitions import metric_method
+        >>> from quick_metric._method_definitions import metric_method
         >>> from quick_metric._apply_methods import apply_method
 >>>
 >>> @metric_method
@@ -52,8 +52,8 @@ Apply multiple methods:
 
 See Also
 --------
-method_definitions : Module for registering methods
-filter : Module for data filtering before method application
+_method_definitions : Module for registering methods
+_filter : Module for data filtering before method application
 """
 
 import hashlib
@@ -62,8 +62,8 @@ from typing import Any, Callable, Optional
 from loguru import logger
 import pandas as pd
 
-from quick_metric.exceptions import MetricsMethodNotFoundError, MetricSpecificationError
-from quick_metric.method_definitions import METRICS_METHODS
+from quick_metric._exceptions import MetricsMethodNotFoundError, MetricSpecificationError
+from quick_metric._method_definitions import METRICS_METHODS
 
 
 def apply_method(
