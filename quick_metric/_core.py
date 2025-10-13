@@ -65,6 +65,7 @@ method_definitions : Method registration system used by this module
 """
 
 from collections.abc import Sequence
+from functools import cache
 from pathlib import Path
 from typing import Optional, Union
 
@@ -127,6 +128,7 @@ def _normalize_method_specs(method_input) -> Sequence[Union[str, dict]]:
     )
 
 
+@cache
 def read_metric_instructions(metric_config_path: Path) -> dict:
     """
     Read metric_instructions dictionary from a YAML config file.
