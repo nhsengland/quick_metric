@@ -1,88 +1,40 @@
 """
 Pipeline integration for oops-its-a-pipeline framework.
 
-This module provides pipeline stages that wrap the quick_metric functionality
-for use within oops-its-a-pipeline workflows. It allows quick_metric to be
-seamlessly integrated into larger data processing pipelines.
+Pipeline stages that wrap quick_metric functionality for use within
+oops-its-a-pipeline workflows with flexible input/output mapping
+and comprehensive error handling.
 
-The module contains two main components:
-1. GenerateMetricsStage - A pipeline stage class that wraps generate_metrics
-2. create_metrics_stage - A convenience factory function for creating stages
+Classes
+-------
+GenerateMetricsStage : Pipeline stage class for metrics generation
 
-Key Features
-------------
-- Thread-safe metrics generation within pipeline contexts
-- Flexible input/output naming for pipeline variable mapping
-- Comprehensive error handling with pipeline-specific exceptions
-- Support for both dictionary and YAML file configurations
-- Optional custom metrics methods injection
-- Full integration with oops-its-a-pipeline logging and validation
-
-Pipeline Integration
--------------------
-The stage can be used in both declarative and method-chaining pipeline styles:
-
-Declarative style:
-    >>> stage = GenerateMetricsStage(
-    ...     data_input="raw_data",
-    ...     config_input="metrics_config",
-    ...     metrics_output="calculated_metrics"
-    ... )
-    >>> pipeline.add_stage(stage)
-
-Method chaining style:
-    >>> pipeline = (Pipeline(config)
-    ...     .add_function_stage(load_data, outputs="data")
-    ...     .add_stage(create_metrics_stage())
-    ...     .add_function_stage(save_results, inputs="metrics"))
-
-Configuration Handling
-----------------------
-The stage accepts configuration in multiple formats:
-- Path objects pointing to YAML files
-- Dictionary objects with metric definitions
-- PipelineConfig objects with a 'config' attribute
-
-Error Handling
---------------
-All errors are wrapped in PipelineStageValidationError with descriptive
-messages that include stage name and operation context for easier debugging.
+Functions
+---------
+create_metrics_stage : Convenience factory function for creating stages
 
 Examples
 --------
-Basic usage with default parameter names:
+Basic pipeline stage creation:
 
->>> from oops_its_a_pipeline import Pipeline, PipelineConfig
->>> from quick_metric.pipeline import create_metrics_stage
->>> import pandas as pd
->>>
->>> class Config(PipelineConfig):
-...     data = pd.DataFrame({'col': [1, 2, 3]})
-...     config = {'metric1': {'method': ['count'], 'filter': {}}}
->>>
->>> pipeline = Pipeline(Config()).add_stage(create_metrics_stage())
->>> results = pipeline.run("test")
->>> print(results['metrics'])
+```python
+from quick_metric.pipeline import create_metrics_stage
+from oops_its_a_pipeline import Pipeline
+
+stage = create_metrics_stage()
+pipeline = Pipeline(config).add_stage(stage)
+results = pipeline.run("pipeline_run")
+```
 
 Custom input/output mapping:
 
->>> stage = create_metrics_stage(
-...     data_input="processed_data",
-...     config_input="metric_definitions",
-...     metrics_output="business_metrics"
-... )
-
-With custom methods:
-
->>> stage = create_metrics_stage(
-...     metrics_methods_input="custom_functions"
-... )
-
-See Also
---------
-quick_metric._core.generate_metrics : Core metrics generation function
-oops_its_a_pipeline.PipelineStage : Base pipeline stage class
-quick_metric._method_definitions : Method registration system
+```python
+stage = create_metrics_stage(
+    data_input="processed_data",
+    config_input="metric_definitions",
+    metrics_output="business_metrics"
+)
+```
 """
 
 from pathlib import Path
@@ -162,42 +114,50 @@ class GenerateMetricsStage(PipelineStage):
     --------
     Creating a stage with default parameters:
 
-    >>> stage = GenerateMetricsStage()
-    >>> pipeline.add_stage(stage)
+    ```python
+    stage = GenerateMetricsStage()
+    pipeline.add_stage(stage)
+    ```
 
     Creating a stage with custom input/output mapping:
 
-    >>> stage = GenerateMetricsStage(
-    ...     data_input="raw_data",
-    ...     config_input="analysis_config",
-    ...     metrics_output="business_metrics",
-    ...     name="business_analysis"
-    ... )
+    ```python
+    stage = GenerateMetricsStage(
+        data_input="raw_data",
+        config_input="analysis_config",
+        metrics_output="business_metrics",
+        name="business_analysis"
+    )
+    ```
 
     Using with custom methods:
 
-    >>> stage = GenerateMetricsStage(
-    ...     metrics_methods_input="domain_specific_methods"
-    ... )
+    ```python
+    stage = GenerateMetricsStage(
+        metrics_methods_input="domain_specific_methods"
+    )
+    ```
 
     Complete pipeline example:
 
-    >>> from oops_its_a_pipeline import Pipeline, PipelineConfig
-    >>> import pandas as pd
-    >>>
-    >>> class MetricsConfig(PipelineConfig):
-    ...     data: pd.DataFrame = pd.DataFrame({
-    ...         'category': ['A', 'B'], 'value': [1, 2]
-    ...     })
-    ...     config: dict = {
-    ...         'test_metric': {'method': ['count'], 'filter': {}}
-    ...     }
-    >>>
-    >>> stage = GenerateMetricsStage()
-    >>> pipeline = Pipeline(MetricsConfig())
-    >>> pipeline.add_stage(stage)
-    >>> results = pipeline.run("metrics_run")
-    >>> print(results['metrics'])
+    ```python
+    from oops_its_a_pipeline import Pipeline, PipelineConfig
+    import pandas as pd
+
+    class MetricsConfig(PipelineConfig):
+        data: pd.DataFrame = pd.DataFrame({
+            'category': ['A', 'B'], 'value': [1, 2]
+        })
+        config: dict = {
+            'test_metric': {'method': ['count'], 'filter': {}}
+        }
+
+    stage = GenerateMetricsStage()
+    pipeline = Pipeline(MetricsConfig())
+    pipeline.add_stage(stage)
+    results = pipeline.run("metrics_run")
+    print(results['metrics'])
+    ```
 
     See Also
     --------
@@ -382,51 +342,61 @@ def create_metrics_stage(
     --------
     Basic usage with default parameters:
 
-    >>> from quick_metric.pipeline import create_metrics_stage
-    >>> stage = create_metrics_stage()
-    >>> pipeline.add_stage(stage)
+    ```python
+    from quick_metric.pipeline import create_metrics_stage
+    stage = create_metrics_stage()
+    pipeline.add_stage(stage)
+    ```
 
     Custom input/output mapping:
 
-    >>> stage = create_metrics_stage(
-    ...     data_input="processed_data",
-    ...     config_input="metric_definitions",
-    ...     metrics_output="business_metrics"
-    ... )
+    ```python
+    stage = create_metrics_stage(
+        data_input="processed_data",
+        config_input="metric_definitions",
+        metrics_output="business_metrics"
+    )
+    ```
 
     Method chaining pipeline construction:
 
-    >>> from oops_its_a_pipeline import Pipeline
-    >>> pipeline = (Pipeline(config)
-    ...     .add_function_stage(load_data, outputs="data")
-    ...     .add_function_stage(load_config, outputs="metrics_config")
-    ...     .add_stage(create_metrics_stage(
-    ...         config_input="metrics_config",
-    ...         metrics_output="calculated_metrics"
-    ...     ))
-    ...     .add_function_stage(save_results, inputs="calculated_metrics"))
+    ```python
+    from oops_its_a_pipeline import Pipeline
+    pipeline = (Pipeline(config)
+        .add_function_stage(load_data, outputs="data")
+        .add_function_stage(load_config, outputs="metrics_config")
+        .add_stage(create_metrics_stage(
+            config_input="metrics_config",
+            metrics_output="calculated_metrics"
+        ))
+        .add_function_stage(save_results, inputs="calculated_metrics"))
+    ```
 
     With custom methods and naming:
 
-    >>> stage = create_metrics_stage(
-    ...     metrics_methods_input="domain_methods",
-    ...     name="domain_analysis",
-    ...     metrics_output="domain_metrics"
-    ... )
+    ```python
+    stage = create_metrics_stage(
+        metrics_methods_input="domain_methods",
+        name="domain_analysis",
+        metrics_output="domain_metrics"
+    )
+    ```
 
     Multiple metrics stages in one pipeline:
 
-    >>> pipeline = (Pipeline(config)
-    ...     .add_stage(create_metrics_stage(
-    ...         config_input="basic_config",
-    ...         metrics_output="basic_metrics",
-    ...         name="basic_analysis"
-    ...     ))
-    ...     .add_stage(create_metrics_stage(
-    ...         config_input="advanced_config",
-    ...         metrics_output="advanced_metrics",
-    ...         name="advanced_analysis"
-    ...     )))
+    ```python
+    pipeline = (Pipeline(config)
+        .add_stage(create_metrics_stage(
+            config_input="basic_config",
+            metrics_output="basic_metrics",
+            name="basic_analysis"
+        ))
+        .add_stage(create_metrics_stage(
+            config_input="advanced_config",
+            metrics_output="advanced_metrics",
+            name="advanced_analysis"
+        )))
+    ```
 
     See Also
     --------

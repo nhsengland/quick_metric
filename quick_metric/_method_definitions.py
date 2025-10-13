@@ -1,10 +1,24 @@
 """
 Method registration and decorator functionality for Quick Metric.
 
-This module provides the core decorator for registering custom metric methods
-that can be used with the quick_metric framework. Methods decorated with
-@metric_method are automatically registered in the global registry and become
-available for use in YAML configurations.
+Provides the core decorator for registering custom metric methods with
+a thread-safe registry system.
+
+Classes
+-------
+MetricRegistry : Thread-safe registry for user-defined metric methods
+
+Functions
+---------
+metric_method : Decorator for registering custom metric functions
+get_method : Retrieve a registered method by name
+get_registered_methods : Get dictionary of all registered methods
+list_method_names : List all registered method names
+clear_methods : Clear all methods from the registry
+
+Constants
+---------
+METRICS_METHODS : Global registry instance
 """
 
 import inspect
@@ -192,16 +206,25 @@ def metric_method(func_or_name=None):
     Examples
     --------
     As a decorator:
-    >>> @metric_method
-    ... def my_custom_metric(data):
-    ...     return len(data)
+
+    ```python
+    @metric_method
+    def my_custom_metric(data):
+        return len(data)
+    ```
 
     To get all methods:
-    >>> all_methods = metric_method()
-    >>> print(list(all_methods.keys()))
+
+    ```python
+    all_methods = metric_method()
+    print(list(all_methods.keys()))
+    ```
 
     To get a specific method:
-    >>> my_method = metric_method('my_custom_metric')
+
+    ```python
+    my_method = metric_method('my_custom_metric')
+    ```
     """
     # Case 1: Called without arguments - return all methods
     if func_or_name is None:

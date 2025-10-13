@@ -1,9 +1,18 @@
 """
 Custom exceptions for Quick Metric framework.
 
-This module provides domain-specific exceptions that inherit from
-nhs_herbot.LoggedException to provide clear, actionable error messages
-with automatic logging.
+Domain-specific exceptions with clear error messages and automatic logging.
+
+Classes
+-------
+MetricMethodError : Base exception for metric method related errors
+MethodRegistrationError : Raised when method registration fails
+InvalidMethodSignatureError : Raised for invalid method signatures
+MetricsMethodNotFoundError : Raised when requested method not found
+MethodNotFoundError : Raised when method lookup fails
+RegistryLockError : Raised when registry operations fail due to locking
+EmptyRegistryError : Raised when operations require non-empty registry
+MetricSpecificationError : Raised for invalid metric specifications
 """
 
 import difflib

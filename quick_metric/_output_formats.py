@@ -1,12 +1,19 @@
 """
 Output format handling for Quick Metric results.
 
-This module provides functionality to convert metric results between different
-output formats while keeping complex data types (like DataFrames) intact.
+Converts metric results between different output formats while preserving
+complex data types like DataFrames.
 
-The module follows the KISS principle by not over-flattening complex results
-and maintaining the integrity of pandas DataFrames and Series objects.
-"""
+Classes
+-------
+OutputFormat : Enumeration of supported output formats
+
+Functions
+---------
+format_results : Convert results to specified output format
+to_dataframe : Convert nested results to pandas DataFrame
+to_records : Convert nested results to list of records
+to_flat_dataframe : Convert nested results to flattened DataFrame"""
 
 from enum import Enum
 from typing import Union

@@ -1,83 +1,47 @@
 """
-Quick Metric: A framework for quickly creating metrics using YAML configs.
+Quick Metric framework for creating metrics from pandas DataFrames.
 
-This package provides a simple way to apply filters and methods to pandas
-DataFrames based on YAML configuration files. It allows users to define
-custom metric methods and configure complex data filtering through
-declarative YAML configurations.
+A framework for applying filters and methods to pandas DataFrames using
+YAML configurations. Register custom metric methods with decorators and
+configure data filtering through declarative specifications.
 
-The main workflow involves:
-1. Define custom metric methods using the @metric_method decorator
-2. Create YAML configurations specifying filters and methods to apply
-3. Apply the configuration to pandas DataFrames to generate metrics
+Functions
+---------
+generate_metrics : Apply metric configurations to pandas DataFrames
+metric_method : Decorator to register custom metric functions
+get_method : Retrieve a registered metric method by name
+list_method_names : List all registered metric method names
+get_registered_methods : Get dictionary of all registered methods
+clear_methods : Clear all registered methods from registry
 
 Examples
 --------
-Basic usage with generate_metrics:
+Basic usage:
 
->>> import pandas as pd
->>> from quick_metric import metric_method, generate_metrics
->>>
->>> @metric_method
-... def count_records(data):
-...     return len(data)
->>>
->>> @metric_method
-... def average_col(data, column='value'):
-...     return data[column].mean()
->>>
->>> data = pd.DataFrame({'category': ['A', 'B', 'A'], 'value': [1, 2, 3]})
->>>
->>> # Simple method specification
->>> config1 = {
-...     'record_count': {
-...         'method': 'count_records',
-...         'filter': {}
-...     }
-... }
->>> results1 = generate_metrics(data, config1)
->>>
->>> # Multiple methods
->>> config2 = {
-...     'analysis': {
-...         'method': ['count_records', 'average_col'],
-...         'filter': {'category': 'A'}
-...     }
-... }
->>> results2 = generate_metrics(data, config2)
->>>
->>> # Method with parameters
->>> config3 = {
-...     'custom_avg': {
-...         'method': {'average_col': {'column': 'value'}},
-...         'filter': {}
-...     }
-... }
->>> results3 = generate_metrics(data, config3)
+```python
+import pandas as pd
+from quick_metric import metric_method, generate_metrics
 
-Method discovery:
+@metric_method
+def count_records(data):
+    return len(data)
 
->>> from quick_metric import metric_method
->>>
->>> # Get information about a specific method
->>> method_info = metric_method('count_records')
->>>
->>> # List all available methods
->>> all_methods = metric_method()
->>> print(sorted(all_methods.keys()))
+@metric_method
+def mean_value(data, column='value'):
+    return data[column].mean()
 
-Note
-----
-This module provides a clean, minimal public API focused on the most common
-use cases. Method specifications support multiple flexible formats:
-- Single method: "method": "method_name"
-- Multiple methods: "method": ["method1", "method2"]
-- Method with parameters: "method": {"method_name": {"param": "value"}}
+data = pd.DataFrame({'category': ['A', 'B', 'A'], 'value': [10, 20, 30]})
+config = {
+    'category_a_metrics': {
+        'method': ['count_records', 'mean_value'],
+        'filter': {'category': 'A'}
+    }
+}
 
-See Also
---------
-method_definitions : Core decorator for registering metric methods
-core : Main metric generation functionality
+results = generate_metrics(data, config)
+print(results['category_a_metrics']['count_records'])  # 2
+print(results['category_a_metrics']['mean_value'])     # 20.0
+```
 """
 
 from quick_metric._core import generate_metrics

@@ -1,59 +1,45 @@
 """
 Method application and execution functionality for Quick Metric.
 
-This module handles the application of registered metric methods to filtered
-pandas DataFrames. It provides both single method application and batch
-method application capabilities, with comprehensive error handling for
-missing methods.
-
-The module acts as the execution engine for the quick_metric framework,
-taking registered methods from the METRICS_METHODS registry and applying
-them to data with proper error handling and result collection.
+Handles the application of registered metric methods to filtered pandas
+DataFrames with error handling for missing methods.
 
 Functions
 ---------
 apply_method : Apply a single metric method to data
 apply_methods : Apply multiple metric methods to data and collect results
 
-Exceptions
-----------
-MetricsMethodNotFoundError : Raised when a requested method is not registered
-
 Examples
 --------
 Apply a single method:
 
-    Examples:
-        >>> import pandas as pd
-        >>> from quick_metric._method_definitions import metric_method
-        >>> from quick_metric._apply_methods import apply_method
->>>
->>> @metric_method
-... def count_rows(data):
-...     return len(data)
->>>
->>> data = pd.DataFrame({'a': [1, 2, 3]})
->>> result = apply_method('count_rows', data)
->>> print(result)
-3
+```python
+import pandas as pd
+from quick_metric._method_definitions import metric_method
+from quick_metric._apply_methods import apply_method
+
+@metric_method
+def count_rows(data):
+    return len(data)
+
+data = pd.DataFrame({'a': [1, 2, 3]})
+result = apply_method('count_rows', data)
+print(result)  # 3
+```
 
 Apply multiple methods:
 
-    >>> from quick_metric._apply_methods import apply_methods
->>>
->>> @metric_method
-... def sum_column(data, column='a'):
-...     return data[column].sum()
->>>
->>> methods = ['count_rows', 'sum_column']
->>> results = apply_methods(methods, data)
->>> print(results)
-{'count_rows': 3, 'sum_column': 6}
+```python
+from quick_metric._apply_methods import apply_methods
 
-See Also
---------
-_method_definitions : Module for registering methods
-_filter : Module for data filtering before method application
+@metric_method
+def sum_column(data, column='a'):
+    return data[column].sum()
+
+methods = ['count_rows', 'sum_column']
+results = apply_methods(methods, data)
+print(results)  # {'count_rows': 3, 'sum_column': 6}
+```
 """
 
 import hashlib

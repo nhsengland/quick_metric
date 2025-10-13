@@ -1,59 +1,48 @@
 """
 Main orchestration and workflow functionality for Quick Metric.
 
-This module provides the primary entry points for the quick_metric framework,
-handling the complete workflow from YAML configuration reading to metric
-result generation. It coordinates between the filtering, method application,
-and configuration parsing components.
-
-The module serves as the main interface for users, providing high-level
-functions that abstract away the complexity of the underlying filtering
-and method application processes.
+Provides entry points for the quick_metric framework, handling the complete
+workflow from YAML configuration reading to metric result generation.
 
 Functions
 ---------
 read_metric_instructions : Load metric configurations from YAML files
 interpret_metric_instructions : Execute complete metric workflow on data
-
-Workflow
---------
-1. Load YAML configuration specifying metrics, filters, and methods
-2. For each metric specification:
-   - Apply filters to subset the input DataFrame
-   - Execute specified methods on the filtered data
-   - Collect results in a structured dictionary
-3. Return comprehensive results for all metrics
+generate_metrics : Main public API for generating metrics from data
 
 Examples
 --------
 Load configuration from YAML file:
 
->>> from pathlib import Path
->>> from quick_metric._core import read_metric_instructions
->>>
->>> config_path = Path('metrics.yaml')
->>> instructions = read_metric_instructions(config_path)
+```python
+from pathlib import Path
+from quick_metric._core import read_metric_instructions
+
+config_path = Path('metrics.yaml')
+instructions = read_metric_instructions(config_path)
+```
 
 Execute complete workflow:
 
->>> import pandas as pd
->>> from quick_metric._core import interpret_metric_instructions
->>> from quick_metric._method_definitions import metric_method
->>>
->>> @metric_method
-... def count_records(data):
-...     return len(data)
->>>
->>> data = pd.DataFrame({'category': ['A', 'B', 'A'], 'value': [1, 2, 3]})
->>> config = {
-...     'category_metrics': {
-...         'method': ['count_records'],
-...         'filter': {'category': 'A'}
-...     }
-... }
->>> results = interpret_metric_instructions(data, config)
->>> print(results['category_metrics']['count_records'])
-2
+```python
+import pandas as pd
+from quick_metric._core import interpret_metric_instructions
+from quick_metric._method_definitions import metric_method
+
+@metric_method
+def count_records(data):
+    return len(data)
+
+data = pd.DataFrame({'category': ['A', 'B', 'A'], 'value': [1, 2, 3]})
+config = {
+    'category_metrics': {
+        'method': ['count_records'],
+        'filter': {'category': 'A'}
+    }
+}
+results = interpret_metric_instructions(data, config)
+print(results['category_metrics']['count_records'])  # 2
+```
 
 YAML Configuration Format
 --------------------------
@@ -75,6 +64,7 @@ apply_methods : Method execution functionality used by this module
 method_definitions : Method registration system used by this module
 """
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Optional, Union
 
@@ -83,14 +73,15 @@ import pandas as pd
 import yaml
 
 from quick_metric._apply_methods import apply_methods
+from quick_metric._exceptions import MetricSpecificationError
 from quick_metric._filter import apply_filter
 from quick_metric._method_definitions import METRICS_METHODS
 from quick_metric._output_formats import OutputFormat, convert_to_format
 
 
-def _normalize_method_specs(method_input):
+def _normalize_method_specs(method_input) -> Sequence[Union[str, dict]]:
     """
-    Normalize various method specification formats into List[str | dict].
+    Normalize various method specification formats into Sequence[str | dict].
 
     Handles these input formats:
     - str: "method_name" -> ["method_name"]
@@ -105,8 +96,13 @@ def _normalize_method_specs(method_input):
 
     Returns
     -------
-    List[str | dict]
-        Normalized list of method specifications
+    Sequence[str | dict]
+        Normalized sequence of method specifications
+
+    Raises
+    ------
+    MetricSpecificationError
+        If the method specification format is invalid.
     """
     if isinstance(method_input, str):
         # Single method name as string
@@ -115,14 +111,19 @@ def _normalize_method_specs(method_input):
         # Already a list - validate contents and return
         for item in method_input:
             if not isinstance(item, (str, dict)):
-                raise ValueError(f"Method list items must be str or dict, got {type(item)}: {item}")
+                raise MetricSpecificationError(
+                    f"Method list items must be str or dict, got {type(item)}: {item}",
+                    method_spec=method_input,
+                )
         return method_input
     if isinstance(method_input, dict):
         # Single method with parameters - convert to list
         return [method_input]
 
-    raise ValueError(
-        f"Method specification must be str, list, or dict, got {type(method_input)}: {method_input}"
+    raise MetricSpecificationError(
+        f"Method specification must be str, list, or dict, got {type(method_input)}: "
+        f"{method_input}",
+        method_spec=method_input,
     )
 
 
@@ -139,11 +140,17 @@ def read_metric_instructions(metric_config_path: Path) -> dict:
     -------
     Dict
         The 'metric_instructions' dictionary from the YAML file.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the configuration file does not exist.
+    MetricSpecificationError
+        If the YAML file is invalid or missing metric_instructions.
     """
     logger.info(f"Reading metric configuration from {metric_config_path}")
 
     if not metric_config_path.exists():
-        logger.error(f"Configuration file not found: {metric_config_path}")
         raise FileNotFoundError(f"Configuration file not found: {metric_config_path}")
 
     try:
@@ -151,8 +158,10 @@ def read_metric_instructions(metric_config_path: Path) -> dict:
             metric_configs = yaml.safe_load(file)
 
         if not isinstance(metric_configs, dict):
-            logger.error("Configuration file must contain a YAML dictionary")
-            raise ValueError("Configuration file must contain a YAML dictionary")
+            raise MetricSpecificationError(
+                "Configuration file must contain a YAML dictionary",
+                method_spec=str(metric_config_path),
+            )
 
         metric_instructions = metric_configs.get("metric_instructions", {})
 
@@ -164,8 +173,9 @@ def read_metric_instructions(metric_config_path: Path) -> dict:
         return metric_instructions
 
     except yaml.YAMLError as e:
-        logger.error(f"Invalid YAML in configuration file: {e}")
-        raise ValueError(f"Invalid YAML in configuration file: {e}") from e
+        raise MetricSpecificationError(
+            f"Invalid YAML in configuration file: {e}", method_spec=str(metric_config_path)
+        ) from e
 
 
 def interpret_metric_instructions(
@@ -189,6 +199,11 @@ def interpret_metric_instructions(
     -------
     Dict
         Dictionary with metric names as keys and method results as values.
+
+    Raises
+    ------
+    MetricSpecificationError
+        If metric instructions are invalid or missing required keys.
     """
     if metrics_methods is None:
         metrics_methods = METRICS_METHODS
@@ -197,8 +212,9 @@ def interpret_metric_instructions(
 
     # Basic validation
     if not isinstance(metric_instructions, dict):
-        logger.error("metric_instructions must be a dictionary")
-        raise ValueError("metric_instructions must be a dictionary")
+        raise MetricSpecificationError(
+            "metric_instructions must be a dictionary", method_spec=metric_instructions
+        )
 
     if data.empty:
         logger.warning("Input DataFrame is empty")
@@ -211,16 +227,22 @@ def interpret_metric_instructions(
 
             # Validate metric instruction structure
             if not isinstance(metric_instruction, dict):
-                logger.error("Metric instruction must be a dict")
-                raise ValueError(f"Metric '{metric_name}' instruction must be a dictionary")
+                raise MetricSpecificationError(
+                    f"Metric '{metric_name}' instruction must be a dictionary",
+                    method_spec=metric_instruction,
+                )
 
             if "method" not in metric_instruction:
-                logger.error("Metric missing 'method' key")
-                raise ValueError(f"Metric '{metric_name}' missing required 'method' key")
+                raise MetricSpecificationError(
+                    f"Metric '{metric_name}' missing required 'method' key",
+                    method_spec=metric_instruction,
+                )
 
             if "filter" not in metric_instruction:
-                logger.error("Metric missing 'filter' key")
-                raise ValueError(f"Metric '{metric_name}' missing required 'filter' key")
+                raise MetricSpecificationError(
+                    f"Metric '{metric_name}' missing required 'filter' key",
+                    method_spec=metric_instruction,
+                )
 
             # Apply filter to data
             filtered_data = apply_filter(data_df=data, filters=metric_instruction["filter"])
@@ -286,46 +308,53 @@ def generate_metrics(
     --------
     Using a dictionary configuration (default nested format):
 
-    >>> import pandas as pd
-    >>> from quick_metric import generate_metrics, metric_method
-    >>>
-    >>> @metric_method
-    ... def count_records(data):
-    ...     return len(data)
-    >>>
-    >>> data = pd.DataFrame({'category': ['A', 'B', 'A'], 'value': [1, 2, 3]})
-    >>> config = {
-    ...     'category_a_count': {
-    ...         'method': ['count_records'],
-    ...         'filter': {'category': 'A'}
-    ...     }
-    ... }
-    >>> results = generate_metrics(data, config)
-    >>> # Returns: {'category_a_count': {'count_records': 2}}
+    ```python
+    import pandas as pd
+    from quick_metric import generate_metrics, metric_method
+
+    @metric_method
+    def count_records(data):
+        return len(data)
+
+    data = pd.DataFrame({'category': ['A', 'B', 'A'], 'value': [1, 2, 3]})
+    config = {
+        'category_a_count': {
+            'method': ['count_records'],
+            'filter': {'category': 'A'}
+        }
+    }
+    results = generate_metrics(data, config)
+    # Returns: {'category_a_count': {'count_records': 2}}
+    ```
 
     Using DataFrame output format:
 
-    >>> df_results = generate_metrics(data, config, output_format="dataframe")
-    >>> # Returns: DataFrame with columns [metric, method, value, value_type]
+    ```python
+    df_results = generate_metrics(data, config, output_format="dataframe")
+    # Returns: DataFrame with columns [metric, method, value, value_type]
+    ```
 
     Using records output format:
 
-    >>> records = generate_metrics(data, config, output_format="records")
-    >>> # Returns: [{'metric': 'category_a_count', 'method': 'count_records', 'value': 2}]
+    ```python
+    records = generate_metrics(data, config, output_format="records")
+    # Returns: [{'metric': 'category_a_count', 'method': 'count_records', 'value': 2}]
+    ```
 
     Using a YAML file:
 
-    >>> from pathlib import Path
-    >>> config_path = Path('my_metrics.yaml')
-    >>> results = generate_metrics(data, config_path)
+    ```python
+    from pathlib import Path
+    config_path = Path('my_metrics.yaml')
+    results = generate_metrics(data, config_path)
+    ```
 
     Raises
     ------
     FileNotFoundError
         If the config path does not exist.
-    KeyError
-        If a YAML file doesn't contain 'metric_instructions' key.
-    ValueError
+    MetricSpecificationError
+        If a YAML file doesn't contain 'metric_instructions' key or is invalid.
         If config parameter or output_format is not a valid type.
     """
     logger.info("Starting metric generation")
@@ -336,8 +365,9 @@ def generate_metrics(
             output_format = OutputFormat(output_format)
         except ValueError as e:
             valid_formats = [f.value for f in OutputFormat]
-            raise ValueError(
-                f"Invalid output_format '{output_format}'. Valid options: {valid_formats}"
+            raise MetricSpecificationError(
+                f"Invalid output_format '{output_format}'. Valid options: {valid_formats}",
+                method_spec=output_format,
             ) from e
 
     # Handle different config input types
@@ -348,8 +378,9 @@ def generate_metrics(
         logger.debug("Using provided dictionary configuration")
         metric_instructions = config
     else:
-        logger.error(f"Invalid config type: {type(config)}")
-        raise ValueError(f"Config must be a pathlib.Path object or dict, got {type(config)}")
+        raise MetricSpecificationError(
+            f"Config must be a pathlib.Path object or dict, got {type(config)}", method_spec=config
+        )
 
     # Generate metrics using the existing function
     results = interpret_metric_instructions(
