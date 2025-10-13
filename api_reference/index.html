@@ -1322,9 +1322,7 @@ If config parameter or output_format is not a valid type.</p>
 
             <details class="quote">
               <summary>Source code in <code>quick_metric/_core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-269">269</a></span>
-<span class="normal"><a href="#__codelineno-0-270">270</a></span>
-<span class="normal"><a href="#__codelineno-0-271">271</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-271">271</a></span>
 <span class="normal"><a href="#__codelineno-0-272">272</a></span>
 <span class="normal"><a href="#__codelineno-0-273">273</a></span>
 <span class="normal"><a href="#__codelineno-0-274">274</a></span>
@@ -1451,136 +1449,138 @@ If config parameter or output_format is not a valid type.</p>
 <span class="normal"><a href="#__codelineno-0-395">395</a></span>
 <span class="normal"><a href="#__codelineno-0-396">396</a></span>
 <span class="normal"><a href="#__codelineno-0-397">397</a></span>
-<span class="normal"><a href="#__codelineno-0-398">398</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-269" name="__codelineno-0-269"></a><span class="k">def</span><span class="w"> </span><span class="nf">generate_metrics</span><span class="p">(</span>
-<a id="__codelineno-0-270" name="__codelineno-0-270"></a>    <span class="n">data</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
-<a id="__codelineno-0-271" name="__codelineno-0-271"></a>    <span class="n">config</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="nb">dict</span><span class="p">],</span>
-<a id="__codelineno-0-272" name="__codelineno-0-272"></a>    <span class="n">metrics_methods</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-273" name="__codelineno-0-273"></a>    <span class="n">output_format</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">OutputFormat</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;nested&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-274" name="__codelineno-0-274"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">dict</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">]]:</span>
-<a id="__codelineno-0-275" name="__codelineno-0-275"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-276" name="__codelineno-0-276"></a><span class="sd">    Generate metrics from data using configuration (main entry point).</span>
-<a id="__codelineno-0-277" name="__codelineno-0-277"></a>
-<a id="__codelineno-0-278" name="__codelineno-0-278"></a><span class="sd">    This is the primary entry point for the quick_metric framework. It provides</span>
-<a id="__codelineno-0-279" name="__codelineno-0-279"></a><span class="sd">    a simple interface for generating metrics from pandas DataFrames using</span>
-<a id="__codelineno-0-280" name="__codelineno-0-280"></a><span class="sd">    either YAML configuration files or dictionary configurations.</span>
-<a id="__codelineno-0-281" name="__codelineno-0-281"></a>
-<a id="__codelineno-0-282" name="__codelineno-0-282"></a><span class="sd">    Parameters</span>
-<a id="__codelineno-0-283" name="__codelineno-0-283"></a><span class="sd">    ----------</span>
-<a id="__codelineno-0-284" name="__codelineno-0-284"></a><span class="sd">    data : pd.DataFrame</span>
-<a id="__codelineno-0-285" name="__codelineno-0-285"></a><span class="sd">        The DataFrame to process and generate metrics from.</span>
-<a id="__codelineno-0-286" name="__codelineno-0-286"></a><span class="sd">    config : Path or Dict</span>
-<a id="__codelineno-0-287" name="__codelineno-0-287"></a><span class="sd">        Either a Path object pointing to a YAML configuration file or a</span>
-<a id="__codelineno-0-288" name="__codelineno-0-288"></a><span class="sd">        dictionary containing metric instructions. If a Path, the YAML file</span>
-<a id="__codelineno-0-289" name="__codelineno-0-289"></a><span class="sd">        should contain a &#39;metric_instructions&#39; key with the configuration.</span>
-<a id="__codelineno-0-290" name="__codelineno-0-290"></a><span class="sd">    metrics_methods : Dict, optional</span>
-<a id="__codelineno-0-291" name="__codelineno-0-291"></a><span class="sd">        Dictionary of available methods. If None, uses the default registered</span>
-<a id="__codelineno-0-292" name="__codelineno-0-292"></a><span class="sd">        methods from METRICS_METHODS.</span>
-<a id="__codelineno-0-293" name="__codelineno-0-293"></a><span class="sd">    output_format : str or OutputFormat, default &quot;nested&quot;</span>
-<a id="__codelineno-0-294" name="__codelineno-0-294"></a><span class="sd">        Format for the output. Options:</span>
-<a id="__codelineno-0-295" name="__codelineno-0-295"></a><span class="sd">        - &quot;nested&quot;: Current dict of dicts format {&#39;metric&#39;: {&#39;method&#39;: result}}</span>
-<a id="__codelineno-0-296" name="__codelineno-0-296"></a><span class="sd">        - &quot;dataframe&quot;: Pandas DataFrame with columns [metric, method, value, value_type]</span>
-<a id="__codelineno-0-297" name="__codelineno-0-297"></a><span class="sd">        - &quot;records&quot;: List of dicts [{&#39;metric&#39;: &#39;...&#39;, &#39;method&#39;: &#39;...&#39;, &#39;value&#39;: ...}]</span>
-<a id="__codelineno-0-298" name="__codelineno-0-298"></a>
-<a id="__codelineno-0-299" name="__codelineno-0-299"></a><span class="sd">    Returns</span>
-<a id="__codelineno-0-300" name="__codelineno-0-300"></a><span class="sd">    -------</span>
-<a id="__codelineno-0-301" name="__codelineno-0-301"></a><span class="sd">    Union[dict, pd.DataFrame, list[dict]]</span>
-<a id="__codelineno-0-302" name="__codelineno-0-302"></a><span class="sd">        Results in the specified format. The exact type depends on output_format:</span>
-<a id="__codelineno-0-303" name="__codelineno-0-303"></a><span class="sd">        - dict: When output_format=&quot;nested&quot; (default)</span>
-<a id="__codelineno-0-304" name="__codelineno-0-304"></a><span class="sd">        - pd.DataFrame: When output_format=&quot;dataframe&quot;</span>
-<a id="__codelineno-0-305" name="__codelineno-0-305"></a><span class="sd">        - list[dict]: When output_format=&quot;records&quot;</span>
-<a id="__codelineno-0-306" name="__codelineno-0-306"></a>
-<a id="__codelineno-0-307" name="__codelineno-0-307"></a><span class="sd">    Examples</span>
-<a id="__codelineno-0-308" name="__codelineno-0-308"></a><span class="sd">    --------</span>
-<a id="__codelineno-0-309" name="__codelineno-0-309"></a><span class="sd">    Using a dictionary configuration (default nested format):</span>
-<a id="__codelineno-0-310" name="__codelineno-0-310"></a>
-<a id="__codelineno-0-311" name="__codelineno-0-311"></a><span class="sd">    ```python</span>
-<a id="__codelineno-0-312" name="__codelineno-0-312"></a><span class="sd">    import pandas as pd</span>
-<a id="__codelineno-0-313" name="__codelineno-0-313"></a><span class="sd">    from quick_metric import generate_metrics, metric_method</span>
-<a id="__codelineno-0-314" name="__codelineno-0-314"></a>
-<a id="__codelineno-0-315" name="__codelineno-0-315"></a><span class="sd">    @metric_method</span>
-<a id="__codelineno-0-316" name="__codelineno-0-316"></a><span class="sd">    def count_records(data):</span>
-<a id="__codelineno-0-317" name="__codelineno-0-317"></a><span class="sd">        return len(data)</span>
-<a id="__codelineno-0-318" name="__codelineno-0-318"></a>
-<a id="__codelineno-0-319" name="__codelineno-0-319"></a><span class="sd">    data = pd.DataFrame({&#39;category&#39;: [&#39;A&#39;, &#39;B&#39;, &#39;A&#39;], &#39;value&#39;: [1, 2, 3]})</span>
-<a id="__codelineno-0-320" name="__codelineno-0-320"></a><span class="sd">    config = {</span>
-<a id="__codelineno-0-321" name="__codelineno-0-321"></a><span class="sd">        &#39;category_a_count&#39;: {</span>
-<a id="__codelineno-0-322" name="__codelineno-0-322"></a><span class="sd">            &#39;method&#39;: [&#39;count_records&#39;],</span>
-<a id="__codelineno-0-323" name="__codelineno-0-323"></a><span class="sd">            &#39;filter&#39;: {&#39;category&#39;: &#39;A&#39;}</span>
-<a id="__codelineno-0-324" name="__codelineno-0-324"></a><span class="sd">        }</span>
-<a id="__codelineno-0-325" name="__codelineno-0-325"></a><span class="sd">    }</span>
-<a id="__codelineno-0-326" name="__codelineno-0-326"></a><span class="sd">    results = generate_metrics(data, config)</span>
-<a id="__codelineno-0-327" name="__codelineno-0-327"></a><span class="sd">    # Returns: {&#39;category_a_count&#39;: {&#39;count_records&#39;: 2}}</span>
-<a id="__codelineno-0-328" name="__codelineno-0-328"></a><span class="sd">    ```</span>
-<a id="__codelineno-0-329" name="__codelineno-0-329"></a>
-<a id="__codelineno-0-330" name="__codelineno-0-330"></a><span class="sd">    Using DataFrame output format:</span>
+<span class="normal"><a href="#__codelineno-0-398">398</a></span>
+<span class="normal"><a href="#__codelineno-0-399">399</a></span>
+<span class="normal"><a href="#__codelineno-0-400">400</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-271" name="__codelineno-0-271"></a><span class="k">def</span><span class="w"> </span><span class="nf">generate_metrics</span><span class="p">(</span>
+<a id="__codelineno-0-272" name="__codelineno-0-272"></a>    <span class="n">data</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+<a id="__codelineno-0-273" name="__codelineno-0-273"></a>    <span class="n">config</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="nb">dict</span><span class="p">],</span>
+<a id="__codelineno-0-274" name="__codelineno-0-274"></a>    <span class="n">metrics_methods</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-275" name="__codelineno-0-275"></a>    <span class="n">output_format</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">OutputFormat</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;nested&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-276" name="__codelineno-0-276"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">dict</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">]]:</span>
+<a id="__codelineno-0-277" name="__codelineno-0-277"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-278" name="__codelineno-0-278"></a><span class="sd">    Generate metrics from data using configuration (main entry point).</span>
+<a id="__codelineno-0-279" name="__codelineno-0-279"></a>
+<a id="__codelineno-0-280" name="__codelineno-0-280"></a><span class="sd">    This is the primary entry point for the quick_metric framework. It provides</span>
+<a id="__codelineno-0-281" name="__codelineno-0-281"></a><span class="sd">    a simple interface for generating metrics from pandas DataFrames using</span>
+<a id="__codelineno-0-282" name="__codelineno-0-282"></a><span class="sd">    either YAML configuration files or dictionary configurations.</span>
+<a id="__codelineno-0-283" name="__codelineno-0-283"></a>
+<a id="__codelineno-0-284" name="__codelineno-0-284"></a><span class="sd">    Parameters</span>
+<a id="__codelineno-0-285" name="__codelineno-0-285"></a><span class="sd">    ----------</span>
+<a id="__codelineno-0-286" name="__codelineno-0-286"></a><span class="sd">    data : pd.DataFrame</span>
+<a id="__codelineno-0-287" name="__codelineno-0-287"></a><span class="sd">        The DataFrame to process and generate metrics from.</span>
+<a id="__codelineno-0-288" name="__codelineno-0-288"></a><span class="sd">    config : Path or Dict</span>
+<a id="__codelineno-0-289" name="__codelineno-0-289"></a><span class="sd">        Either a Path object pointing to a YAML configuration file or a</span>
+<a id="__codelineno-0-290" name="__codelineno-0-290"></a><span class="sd">        dictionary containing metric instructions. If a Path, the YAML file</span>
+<a id="__codelineno-0-291" name="__codelineno-0-291"></a><span class="sd">        should contain a &#39;metric_instructions&#39; key with the configuration.</span>
+<a id="__codelineno-0-292" name="__codelineno-0-292"></a><span class="sd">    metrics_methods : Dict, optional</span>
+<a id="__codelineno-0-293" name="__codelineno-0-293"></a><span class="sd">        Dictionary of available methods. If None, uses the default registered</span>
+<a id="__codelineno-0-294" name="__codelineno-0-294"></a><span class="sd">        methods from METRICS_METHODS.</span>
+<a id="__codelineno-0-295" name="__codelineno-0-295"></a><span class="sd">    output_format : str or OutputFormat, default &quot;nested&quot;</span>
+<a id="__codelineno-0-296" name="__codelineno-0-296"></a><span class="sd">        Format for the output. Options:</span>
+<a id="__codelineno-0-297" name="__codelineno-0-297"></a><span class="sd">        - &quot;nested&quot;: Current dict of dicts format {&#39;metric&#39;: {&#39;method&#39;: result}}</span>
+<a id="__codelineno-0-298" name="__codelineno-0-298"></a><span class="sd">        - &quot;dataframe&quot;: Pandas DataFrame with columns [metric, method, value, value_type]</span>
+<a id="__codelineno-0-299" name="__codelineno-0-299"></a><span class="sd">        - &quot;records&quot;: List of dicts [{&#39;metric&#39;: &#39;...&#39;, &#39;method&#39;: &#39;...&#39;, &#39;value&#39;: ...}]</span>
+<a id="__codelineno-0-300" name="__codelineno-0-300"></a>
+<a id="__codelineno-0-301" name="__codelineno-0-301"></a><span class="sd">    Returns</span>
+<a id="__codelineno-0-302" name="__codelineno-0-302"></a><span class="sd">    -------</span>
+<a id="__codelineno-0-303" name="__codelineno-0-303"></a><span class="sd">    Union[dict, pd.DataFrame, list[dict]]</span>
+<a id="__codelineno-0-304" name="__codelineno-0-304"></a><span class="sd">        Results in the specified format. The exact type depends on output_format:</span>
+<a id="__codelineno-0-305" name="__codelineno-0-305"></a><span class="sd">        - dict: When output_format=&quot;nested&quot; (default)</span>
+<a id="__codelineno-0-306" name="__codelineno-0-306"></a><span class="sd">        - pd.DataFrame: When output_format=&quot;dataframe&quot;</span>
+<a id="__codelineno-0-307" name="__codelineno-0-307"></a><span class="sd">        - list[dict]: When output_format=&quot;records&quot;</span>
+<a id="__codelineno-0-308" name="__codelineno-0-308"></a>
+<a id="__codelineno-0-309" name="__codelineno-0-309"></a><span class="sd">    Examples</span>
+<a id="__codelineno-0-310" name="__codelineno-0-310"></a><span class="sd">    --------</span>
+<a id="__codelineno-0-311" name="__codelineno-0-311"></a><span class="sd">    Using a dictionary configuration (default nested format):</span>
+<a id="__codelineno-0-312" name="__codelineno-0-312"></a>
+<a id="__codelineno-0-313" name="__codelineno-0-313"></a><span class="sd">    ```python</span>
+<a id="__codelineno-0-314" name="__codelineno-0-314"></a><span class="sd">    import pandas as pd</span>
+<a id="__codelineno-0-315" name="__codelineno-0-315"></a><span class="sd">    from quick_metric import generate_metrics, metric_method</span>
+<a id="__codelineno-0-316" name="__codelineno-0-316"></a>
+<a id="__codelineno-0-317" name="__codelineno-0-317"></a><span class="sd">    @metric_method</span>
+<a id="__codelineno-0-318" name="__codelineno-0-318"></a><span class="sd">    def count_records(data):</span>
+<a id="__codelineno-0-319" name="__codelineno-0-319"></a><span class="sd">        return len(data)</span>
+<a id="__codelineno-0-320" name="__codelineno-0-320"></a>
+<a id="__codelineno-0-321" name="__codelineno-0-321"></a><span class="sd">    data = pd.DataFrame({&#39;category&#39;: [&#39;A&#39;, &#39;B&#39;, &#39;A&#39;], &#39;value&#39;: [1, 2, 3]})</span>
+<a id="__codelineno-0-322" name="__codelineno-0-322"></a><span class="sd">    config = {</span>
+<a id="__codelineno-0-323" name="__codelineno-0-323"></a><span class="sd">        &#39;category_a_count&#39;: {</span>
+<a id="__codelineno-0-324" name="__codelineno-0-324"></a><span class="sd">            &#39;method&#39;: [&#39;count_records&#39;],</span>
+<a id="__codelineno-0-325" name="__codelineno-0-325"></a><span class="sd">            &#39;filter&#39;: {&#39;category&#39;: &#39;A&#39;}</span>
+<a id="__codelineno-0-326" name="__codelineno-0-326"></a><span class="sd">        }</span>
+<a id="__codelineno-0-327" name="__codelineno-0-327"></a><span class="sd">    }</span>
+<a id="__codelineno-0-328" name="__codelineno-0-328"></a><span class="sd">    results = generate_metrics(data, config)</span>
+<a id="__codelineno-0-329" name="__codelineno-0-329"></a><span class="sd">    # Returns: {&#39;category_a_count&#39;: {&#39;count_records&#39;: 2}}</span>
+<a id="__codelineno-0-330" name="__codelineno-0-330"></a><span class="sd">    ```</span>
 <a id="__codelineno-0-331" name="__codelineno-0-331"></a>
-<a id="__codelineno-0-332" name="__codelineno-0-332"></a><span class="sd">    ```python</span>
-<a id="__codelineno-0-333" name="__codelineno-0-333"></a><span class="sd">    df_results = generate_metrics(data, config, output_format=&quot;dataframe&quot;)</span>
-<a id="__codelineno-0-334" name="__codelineno-0-334"></a><span class="sd">    # Returns: DataFrame with columns [metric, method, value, value_type]</span>
-<a id="__codelineno-0-335" name="__codelineno-0-335"></a><span class="sd">    ```</span>
-<a id="__codelineno-0-336" name="__codelineno-0-336"></a>
-<a id="__codelineno-0-337" name="__codelineno-0-337"></a><span class="sd">    Using records output format:</span>
+<a id="__codelineno-0-332" name="__codelineno-0-332"></a><span class="sd">    Using DataFrame output format:</span>
+<a id="__codelineno-0-333" name="__codelineno-0-333"></a>
+<a id="__codelineno-0-334" name="__codelineno-0-334"></a><span class="sd">    ```python</span>
+<a id="__codelineno-0-335" name="__codelineno-0-335"></a><span class="sd">    df_results = generate_metrics(data, config, output_format=&quot;dataframe&quot;)</span>
+<a id="__codelineno-0-336" name="__codelineno-0-336"></a><span class="sd">    # Returns: DataFrame with columns [metric, method, value, value_type]</span>
+<a id="__codelineno-0-337" name="__codelineno-0-337"></a><span class="sd">    ```</span>
 <a id="__codelineno-0-338" name="__codelineno-0-338"></a>
-<a id="__codelineno-0-339" name="__codelineno-0-339"></a><span class="sd">    ```python</span>
-<a id="__codelineno-0-340" name="__codelineno-0-340"></a><span class="sd">    records = generate_metrics(data, config, output_format=&quot;records&quot;)</span>
-<a id="__codelineno-0-341" name="__codelineno-0-341"></a><span class="sd">    # Returns: [{&#39;metric&#39;: &#39;category_a_count&#39;, &#39;method&#39;: &#39;count_records&#39;, &#39;value&#39;: 2}]</span>
-<a id="__codelineno-0-342" name="__codelineno-0-342"></a><span class="sd">    ```</span>
-<a id="__codelineno-0-343" name="__codelineno-0-343"></a>
-<a id="__codelineno-0-344" name="__codelineno-0-344"></a><span class="sd">    Using a YAML file:</span>
+<a id="__codelineno-0-339" name="__codelineno-0-339"></a><span class="sd">    Using records output format:</span>
+<a id="__codelineno-0-340" name="__codelineno-0-340"></a>
+<a id="__codelineno-0-341" name="__codelineno-0-341"></a><span class="sd">    ```python</span>
+<a id="__codelineno-0-342" name="__codelineno-0-342"></a><span class="sd">    records = generate_metrics(data, config, output_format=&quot;records&quot;)</span>
+<a id="__codelineno-0-343" name="__codelineno-0-343"></a><span class="sd">    # Returns: [{&#39;metric&#39;: &#39;category_a_count&#39;, &#39;method&#39;: &#39;count_records&#39;, &#39;value&#39;: 2}]</span>
+<a id="__codelineno-0-344" name="__codelineno-0-344"></a><span class="sd">    ```</span>
 <a id="__codelineno-0-345" name="__codelineno-0-345"></a>
-<a id="__codelineno-0-346" name="__codelineno-0-346"></a><span class="sd">    ```python</span>
-<a id="__codelineno-0-347" name="__codelineno-0-347"></a><span class="sd">    from pathlib import Path</span>
-<a id="__codelineno-0-348" name="__codelineno-0-348"></a><span class="sd">    config_path = Path(&#39;my_metrics.yaml&#39;)</span>
-<a id="__codelineno-0-349" name="__codelineno-0-349"></a><span class="sd">    results = generate_metrics(data, config_path)</span>
-<a id="__codelineno-0-350" name="__codelineno-0-350"></a><span class="sd">    ```</span>
-<a id="__codelineno-0-351" name="__codelineno-0-351"></a>
-<a id="__codelineno-0-352" name="__codelineno-0-352"></a><span class="sd">    Raises</span>
-<a id="__codelineno-0-353" name="__codelineno-0-353"></a><span class="sd">    ------</span>
-<a id="__codelineno-0-354" name="__codelineno-0-354"></a><span class="sd">    FileNotFoundError</span>
-<a id="__codelineno-0-355" name="__codelineno-0-355"></a><span class="sd">        If the config path does not exist.</span>
-<a id="__codelineno-0-356" name="__codelineno-0-356"></a><span class="sd">    MetricSpecificationError</span>
-<a id="__codelineno-0-357" name="__codelineno-0-357"></a><span class="sd">        If a YAML file doesn&#39;t contain &#39;metric_instructions&#39; key or is invalid.</span>
-<a id="__codelineno-0-358" name="__codelineno-0-358"></a><span class="sd">        If config parameter or output_format is not a valid type.</span>
-<a id="__codelineno-0-359" name="__codelineno-0-359"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-360" name="__codelineno-0-360"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Starting metric generation&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-361" name="__codelineno-0-361"></a>
-<a id="__codelineno-0-362" name="__codelineno-0-362"></a>    <span class="c1"># Convert string format to enum</span>
-<a id="__codelineno-0-363" name="__codelineno-0-363"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">output_format</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
-<a id="__codelineno-0-364" name="__codelineno-0-364"></a>        <span class="k">try</span><span class="p">:</span>
-<a id="__codelineno-0-365" name="__codelineno-0-365"></a>            <span class="n">output_format</span> <span class="o">=</span> <span class="n">OutputFormat</span><span class="p">(</span><span class="n">output_format</span><span class="p">)</span>
-<a id="__codelineno-0-366" name="__codelineno-0-366"></a>        <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-<a id="__codelineno-0-367" name="__codelineno-0-367"></a>            <span class="n">valid_formats</span> <span class="o">=</span> <span class="p">[</span><span class="n">f</span><span class="o">.</span><span class="n">value</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">OutputFormat</span><span class="p">]</span>
-<a id="__codelineno-0-368" name="__codelineno-0-368"></a>            <span class="k">raise</span> <span class="n">MetricSpecificationError</span><span class="p">(</span>
-<a id="__codelineno-0-369" name="__codelineno-0-369"></a>                <span class="sa">f</span><span class="s2">&quot;Invalid output_format &#39;</span><span class="si">{</span><span class="n">output_format</span><span class="si">}</span><span class="s2">&#39;. Valid options: </span><span class="si">{</span><span class="n">valid_formats</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-370" name="__codelineno-0-370"></a>                <span class="n">method_spec</span><span class="o">=</span><span class="n">output_format</span><span class="p">,</span>
-<a id="__codelineno-0-371" name="__codelineno-0-371"></a>            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
-<a id="__codelineno-0-372" name="__codelineno-0-372"></a>
-<a id="__codelineno-0-373" name="__codelineno-0-373"></a>    <span class="c1"># Handle different config input types</span>
-<a id="__codelineno-0-374" name="__codelineno-0-374"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">Path</span><span class="p">):</span>
-<a id="__codelineno-0-375" name="__codelineno-0-375"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Loading configuration from file: </span><span class="si">{</span><span class="n">config</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-376" name="__codelineno-0-376"></a>        <span class="n">metric_instructions</span> <span class="o">=</span> <span class="n">read_metric_instructions</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
-<a id="__codelineno-0-377" name="__codelineno-0-377"></a>    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
-<a id="__codelineno-0-378" name="__codelineno-0-378"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Using provided dictionary configuration&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-379" name="__codelineno-0-379"></a>        <span class="n">metric_instructions</span> <span class="o">=</span> <span class="n">config</span>
-<a id="__codelineno-0-380" name="__codelineno-0-380"></a>    <span class="k">else</span><span class="p">:</span>
-<a id="__codelineno-0-381" name="__codelineno-0-381"></a>        <span class="k">raise</span> <span class="n">MetricSpecificationError</span><span class="p">(</span>
-<a id="__codelineno-0-382" name="__codelineno-0-382"></a>            <span class="sa">f</span><span class="s2">&quot;Config must be a pathlib.Path object or dict, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">config</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">method_spec</span><span class="o">=</span><span class="n">config</span>
-<a id="__codelineno-0-383" name="__codelineno-0-383"></a>        <span class="p">)</span>
-<a id="__codelineno-0-384" name="__codelineno-0-384"></a>
-<a id="__codelineno-0-385" name="__codelineno-0-385"></a>    <span class="c1"># Generate metrics using the existing function</span>
-<a id="__codelineno-0-386" name="__codelineno-0-386"></a>    <span class="n">results</span> <span class="o">=</span> <span class="n">interpret_metric_instructions</span><span class="p">(</span>
-<a id="__codelineno-0-387" name="__codelineno-0-387"></a>        <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
-<a id="__codelineno-0-388" name="__codelineno-0-388"></a>        <span class="n">metric_instructions</span><span class="o">=</span><span class="n">metric_instructions</span><span class="p">,</span>
-<a id="__codelineno-0-389" name="__codelineno-0-389"></a>        <span class="n">metrics_methods</span><span class="o">=</span><span class="n">metrics_methods</span><span class="p">,</span>
-<a id="__codelineno-0-390" name="__codelineno-0-390"></a>    <span class="p">)</span>
-<a id="__codelineno-0-391" name="__codelineno-0-391"></a>
-<a id="__codelineno-0-392" name="__codelineno-0-392"></a>    <span class="c1"># Convert to requested format</span>
-<a id="__codelineno-0-393" name="__codelineno-0-393"></a>    <span class="k">if</span> <span class="n">output_format</span> <span class="o">!=</span> <span class="n">OutputFormat</span><span class="o">.</span><span class="n">NESTED</span><span class="p">:</span>
-<a id="__codelineno-0-394" name="__codelineno-0-394"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Converting results to </span><span class="si">{</span><span class="n">output_format</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2"> format&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-395" name="__codelineno-0-395"></a>        <span class="n">results</span> <span class="o">=</span> <span class="n">convert_to_format</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">output_format</span><span class="p">)</span>
-<a id="__codelineno-0-396" name="__codelineno-0-396"></a>
-<a id="__codelineno-0-397" name="__codelineno-0-397"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">success</span><span class="p">(</span><span class="s2">&quot;Metric generation completed successfully&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-398" name="__codelineno-0-398"></a>    <span class="k">return</span> <span class="n">results</span>
+<a id="__codelineno-0-346" name="__codelineno-0-346"></a><span class="sd">    Using a YAML file:</span>
+<a id="__codelineno-0-347" name="__codelineno-0-347"></a>
+<a id="__codelineno-0-348" name="__codelineno-0-348"></a><span class="sd">    ```python</span>
+<a id="__codelineno-0-349" name="__codelineno-0-349"></a><span class="sd">    from pathlib import Path</span>
+<a id="__codelineno-0-350" name="__codelineno-0-350"></a><span class="sd">    config_path = Path(&#39;my_metrics.yaml&#39;)</span>
+<a id="__codelineno-0-351" name="__codelineno-0-351"></a><span class="sd">    results = generate_metrics(data, config_path)</span>
+<a id="__codelineno-0-352" name="__codelineno-0-352"></a><span class="sd">    ```</span>
+<a id="__codelineno-0-353" name="__codelineno-0-353"></a>
+<a id="__codelineno-0-354" name="__codelineno-0-354"></a><span class="sd">    Raises</span>
+<a id="__codelineno-0-355" name="__codelineno-0-355"></a><span class="sd">    ------</span>
+<a id="__codelineno-0-356" name="__codelineno-0-356"></a><span class="sd">    FileNotFoundError</span>
+<a id="__codelineno-0-357" name="__codelineno-0-357"></a><span class="sd">        If the config path does not exist.</span>
+<a id="__codelineno-0-358" name="__codelineno-0-358"></a><span class="sd">    MetricSpecificationError</span>
+<a id="__codelineno-0-359" name="__codelineno-0-359"></a><span class="sd">        If a YAML file doesn&#39;t contain &#39;metric_instructions&#39; key or is invalid.</span>
+<a id="__codelineno-0-360" name="__codelineno-0-360"></a><span class="sd">        If config parameter or output_format is not a valid type.</span>
+<a id="__codelineno-0-361" name="__codelineno-0-361"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-362" name="__codelineno-0-362"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Starting metric generation&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-363" name="__codelineno-0-363"></a>
+<a id="__codelineno-0-364" name="__codelineno-0-364"></a>    <span class="c1"># Convert string format to enum</span>
+<a id="__codelineno-0-365" name="__codelineno-0-365"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">output_format</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+<a id="__codelineno-0-366" name="__codelineno-0-366"></a>        <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-0-367" name="__codelineno-0-367"></a>            <span class="n">output_format</span> <span class="o">=</span> <span class="n">OutputFormat</span><span class="p">(</span><span class="n">output_format</span><span class="p">)</span>
+<a id="__codelineno-0-368" name="__codelineno-0-368"></a>        <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+<a id="__codelineno-0-369" name="__codelineno-0-369"></a>            <span class="n">valid_formats</span> <span class="o">=</span> <span class="p">[</span><span class="n">f</span><span class="o">.</span><span class="n">value</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">OutputFormat</span><span class="p">]</span>
+<a id="__codelineno-0-370" name="__codelineno-0-370"></a>            <span class="k">raise</span> <span class="n">MetricSpecificationError</span><span class="p">(</span>
+<a id="__codelineno-0-371" name="__codelineno-0-371"></a>                <span class="sa">f</span><span class="s2">&quot;Invalid output_format &#39;</span><span class="si">{</span><span class="n">output_format</span><span class="si">}</span><span class="s2">&#39;. Valid options: </span><span class="si">{</span><span class="n">valid_formats</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-372" name="__codelineno-0-372"></a>                <span class="n">method_spec</span><span class="o">=</span><span class="n">output_format</span><span class="p">,</span>
+<a id="__codelineno-0-373" name="__codelineno-0-373"></a>            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
+<a id="__codelineno-0-374" name="__codelineno-0-374"></a>
+<a id="__codelineno-0-375" name="__codelineno-0-375"></a>    <span class="c1"># Handle different config input types</span>
+<a id="__codelineno-0-376" name="__codelineno-0-376"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">Path</span><span class="p">):</span>
+<a id="__codelineno-0-377" name="__codelineno-0-377"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Loading configuration from file: </span><span class="si">{</span><span class="n">config</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-378" name="__codelineno-0-378"></a>        <span class="n">metric_instructions</span> <span class="o">=</span> <span class="n">read_metric_instructions</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+<a id="__codelineno-0-379" name="__codelineno-0-379"></a>    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+<a id="__codelineno-0-380" name="__codelineno-0-380"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Using provided dictionary configuration&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-381" name="__codelineno-0-381"></a>        <span class="n">metric_instructions</span> <span class="o">=</span> <span class="n">config</span>
+<a id="__codelineno-0-382" name="__codelineno-0-382"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-383" name="__codelineno-0-383"></a>        <span class="k">raise</span> <span class="n">MetricSpecificationError</span><span class="p">(</span>
+<a id="__codelineno-0-384" name="__codelineno-0-384"></a>            <span class="sa">f</span><span class="s2">&quot;Config must be a pathlib.Path object or dict, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">config</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">method_spec</span><span class="o">=</span><span class="n">config</span>
+<a id="__codelineno-0-385" name="__codelineno-0-385"></a>        <span class="p">)</span>
+<a id="__codelineno-0-386" name="__codelineno-0-386"></a>
+<a id="__codelineno-0-387" name="__codelineno-0-387"></a>    <span class="c1"># Generate metrics using the existing function</span>
+<a id="__codelineno-0-388" name="__codelineno-0-388"></a>    <span class="n">results</span> <span class="o">=</span> <span class="n">interpret_metric_instructions</span><span class="p">(</span>
+<a id="__codelineno-0-389" name="__codelineno-0-389"></a>        <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
+<a id="__codelineno-0-390" name="__codelineno-0-390"></a>        <span class="n">metric_instructions</span><span class="o">=</span><span class="n">metric_instructions</span><span class="p">,</span>
+<a id="__codelineno-0-391" name="__codelineno-0-391"></a>        <span class="n">metrics_methods</span><span class="o">=</span><span class="n">metrics_methods</span><span class="p">,</span>
+<a id="__codelineno-0-392" name="__codelineno-0-392"></a>    <span class="p">)</span>
+<a id="__codelineno-0-393" name="__codelineno-0-393"></a>
+<a id="__codelineno-0-394" name="__codelineno-0-394"></a>    <span class="c1"># Convert to requested format</span>
+<a id="__codelineno-0-395" name="__codelineno-0-395"></a>    <span class="k">if</span> <span class="n">output_format</span> <span class="o">!=</span> <span class="n">OutputFormat</span><span class="o">.</span><span class="n">NESTED</span><span class="p">:</span>
+<a id="__codelineno-0-396" name="__codelineno-0-396"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Converting results to </span><span class="si">{</span><span class="n">output_format</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2"> format&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-397" name="__codelineno-0-397"></a>        <span class="n">results</span> <span class="o">=</span> <span class="n">convert_to_format</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">output_format</span><span class="p">)</span>
+<a id="__codelineno-0-398" name="__codelineno-0-398"></a>
+<a id="__codelineno-0-399" name="__codelineno-0-399"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">success</span><span class="p">(</span><span class="s2">&quot;Metric generation completed successfully&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-400" name="__codelineno-0-400"></a>    <span class="k">return</span> <span class="n">results</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
