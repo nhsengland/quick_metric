@@ -61,13 +61,13 @@ nav:
   - Contributing: contributing.md
   - API Reference: 
     - api_reference/index.md
-    - Core Functions: api_reference/core.md
-    - Output Formats: api_reference/output_formats.md
-    - Method Definitions: api_reference/method_definitions.md
-    - Filter: api_reference/filter.md
     - Apply Methods: api_reference/apply_methods.md
-    - Pipeline Integration: api_reference/pipeline.md
+    - Core Functions: api_reference/core.md
     - Exceptions: api_reference/exceptions.md
+    - Filter: api_reference/filter.md
+    - Method Definitions: api_reference/method_definitions.md
+    - Output Formats: api_reference/output_formats.md
+    - Pipeline Integration: api_reference/pipeline.md
 
 extra_css:
   - stylesheets/nhs_style.css
@@ -117,3 +117,4 @@ extra_javascript:
 
 watch:
   - docs/overrides
+  - quick_metric
