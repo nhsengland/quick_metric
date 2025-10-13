@@ -1,6 +1,17 @@
 # Quick Metric
 
-Welcome to **Quick Metric** - a powerful framework for quickly creating metrics using easy-to-edit YAML configs and reusable methods to filter, calculate, and transform data.
+[![RAP Status: Gold](https://img.shields.io/badge/RAP_Status-Gold-gold)](https://nhsdigital.github.io/rap-community-of-practice/introduction_to_RAP/levels_of_RAP/#gold-rap---analysis-as-a-product, "Gold RAP")
+[![Python: 3.10 | 3.11 | 3.12](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/downloads/ "Python 3.10, 3.11, 3.12")
+[![Code Style: Ruff](https://img.shields.io/badge/Code%20Style-Ruff-D7FF64.svg)](https://github.com/astral-sh/ruff)
+[![Linting: Ruff](https://img.shields.io/badge/Linting-Ruff-red.svg)](https://github.com/astral-sh/ruff)
+[![Testing: tox](https://img.shields.io/badge/Testing-tox-green.svg)](https://tox.readthedocs.io/)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
+[![licence: MIT](https://img.shields.io/badge/Licence-MIT-yellow.svg)](https://opensource.org/licenses/MIT "MIT License")
+[![licence: OGL3](https://img.shields.io/badge/Licence-OGL3-darkgrey "licence: Open Government Licence 3")](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/)
+[![Tests and Linting](https://github.com/nhsengland/quick_metric/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nhsengland/quick_metric/actions/workflows/ci.yml)
+[![Documentation build with Material for MkDocs](https://img.shields.io/badge/Material_for_MkDocs-526CFE?style=for-the-badge&logo=MaterialForMkDocs&logoColor=white)](https://squidfunk.github.io/mkdocs-material/)
+
+Welcome to Quick Metric - a framework for quickly creating metrics using easy-to-edit YAML configs and reusable methods to filter, calculate, and transform data.
 
 !!! info "Purpose"
 
@@ -23,15 +34,28 @@ Welcome to **Quick Metric** - a powerful framework for quickly creating metrics 
 
 ## Quick Start
 
-Install Quick Metric and its dependencies:
+Clone the repository:
 
 ```bash
-# Clone and install
 git clone <repository-url>
 cd quick_metric
-uv venv && source .venv/bin/activate
-uv pip install -e .
 ```
+
+Install Quick Metric and its dependencies:
+
+=== "uv (recommended)"
+
+    ```bash
+    uv venv && source .venv/bin/activate
+    uv pip install -e .
+    ```
+
+=== "pip"
+
+    ```bash
+    python -m venv .venv && source .venv/bin/activate
+    pip install -e .
+    ```
 
 Basic usage example:
 
