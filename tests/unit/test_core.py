@@ -13,6 +13,7 @@ from quick_metric._core import (
     interpret_metric_instructions,
     read_metric_instructions,
 )
+from quick_metric._exceptions import MetricSpecificationError
 
 
 class TestGenerateMetrics:
@@ -83,7 +84,7 @@ class TestGenerateMetrics:
         """Test generate_metrics with invalid config type."""
         data = pd.DataFrame({"col": [1, 2, 3]})
 
-        with pytest.raises(ValueError, match="Config must be a pathlib.Path"):
+        with pytest.raises(MetricSpecificationError, match="Config must be a pathlib.Path"):
             generate_metrics(data, 123)  # type: ignore
 
     def test_generate_metrics_non_dict_instructions(self):
@@ -91,7 +92,9 @@ class TestGenerateMetrics:
 
         data = pd.DataFrame({"col": [1, 2, 3]})
 
-        with pytest.raises(ValueError, match="metric_instructions must be a dictionary"):
+        with pytest.raises(
+            MetricSpecificationError, match="metric_instructions must be a dictionary"
+        ):
             interpret_metric_instructions(data, "not_a_dict")  # type: ignore
 
     def test_generate_metrics_empty_dataframe_warning(self):
@@ -122,7 +125,7 @@ class TestGenerateMetrics:
 
         data = pd.DataFrame({"col": [1, 2, 3]})
 
-        with pytest.raises(ValueError, match=expected_error):
+        with pytest.raises(MetricSpecificationError, match=expected_error):
             interpret_metric_instructions(data, config)
 
     def test_generate_metrics_invalid_output_format(self):
@@ -130,7 +133,9 @@ class TestGenerateMetrics:
         data = pd.DataFrame({"col": [1, 2, 3]})
         config = {"test": {"method": ["count_records"], "filter": {}}}
 
-        with pytest.raises(ValueError, match="Invalid output_format 'invalid_format'"):
+        with pytest.raises(
+            MetricSpecificationError, match="Invalid output_format 'invalid_format'"
+        ):
             generate_metrics(data, config, output_format="invalid_format")
 
     def test_generate_metrics_invalid_config_type_detailed(self):
@@ -138,7 +143,9 @@ class TestGenerateMetrics:
         data = pd.DataFrame({"col": [1, 2, 3]})
         invalid_config = ["not", "a", "dict", "or", "path"]
 
-        with pytest.raises(ValueError, match="Config must be a pathlib.Path object or dict"):
+        with pytest.raises(
+            MetricSpecificationError, match="Config must be a pathlib.Path object or dict"
+        ):
             generate_metrics(data, invalid_config)  # type: ignore
 
     def test_generate_metrics_with_flat_output_format(self):
@@ -178,21 +185,23 @@ class TestReadMetricInstructions:
         assert "Configuration file not found" in str(exc_info.value)
 
     def test_invalid_yaml_raises_syntax_error(self):
-        """Test that invalid YAML raises a ValueError."""
+        """Test that invalid YAML raises a MetricSpecificationError."""
         # Create a temporary file with invalid YAML content
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as temp_file:
             temp_file.write("invalid: yaml: content: [")
             temp_file_path = Path(temp_file.name)
 
         try:
-            with pytest.raises(ValueError, match="Invalid YAML in configuration file"):
+            with pytest.raises(
+                MetricSpecificationError, match="Invalid YAML in configuration file"
+            ):
                 read_metric_instructions(temp_file_path)
         finally:
             # Clean up
             temp_file_path.unlink()
 
     def test_read_non_dict_yaml(self):
-        """Test reading from file that contains non-dict YAML raises ValueError."""
+        """Test reading from file that contains non-dict YAML raises MetricSpecificationError."""
         # Create a temporary file with list content
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as temp_file:
             yaml.dump([1, 2, 3], temp_file)
@@ -200,7 +209,7 @@ class TestReadMetricInstructions:
 
         try:
             with pytest.raises(
-                ValueError, match="Configuration file must contain a YAML dictionary"
+                MetricSpecificationError, match="Configuration file must contain a YAML dictionary"
             ):
                 read_metric_instructions(temp_file_path)
         finally:
@@ -259,7 +268,7 @@ class TestNormalizeMethodSpecs:
         # List with invalid item type
         invalid_method_input = ["valid_method", 123]  # 123 is invalid
 
-        with pytest.raises(ValueError, match="Method list items must be str or dict"):
+        with pytest.raises(MetricSpecificationError, match="Method list items must be str or dict"):
             _normalize_method_specs(invalid_method_input)
 
     def test_normalize_method_specs_with_invalid_type(self):
@@ -267,7 +276,9 @@ class TestNormalizeMethodSpecs:
         # Invalid type (not str, list, or dict)
         invalid_method_input = 123
 
-        with pytest.raises(ValueError, match="Method specification must be str, list, or dict"):
+        with pytest.raises(
+            MetricSpecificationError, match="Method specification must be str, list, or dict"
+        ):
             _normalize_method_specs(invalid_method_input)
 
     def test_normalize_method_specs_with_valid_string(self):
