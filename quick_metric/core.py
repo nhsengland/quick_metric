@@ -16,7 +16,7 @@ Load configuration from YAML file:
 
 ```python
 from pathlib import Path
-from quick_metric._core import read_metric_instructions
+from quick_metric.core import read_metric_instructions
 
 config_path = Path('metrics.yaml')
 instructions = read_metric_instructions(config_path)
@@ -26,8 +26,8 @@ Execute complete workflow:
 
 ```python
 import pandas as pd
-from quick_metric._core import interpret_metric_instructions
-from quick_metric._method_definitions import metric_method
+from quick_metric.core import interpret_metric_instructions
+from quick_metric.registry import metric_method
 
 @metric_method
 def count_records(data):
@@ -40,8 +40,8 @@ config = {
         'filter': {'category': 'A'}
     }
 }
-results = interpret_metric_instructions(data, config)
-print(results['category_metrics']['count_records'])  # 2
+store = interpret_metric_instructions(data, config)
+print(store.value('category_metrics', 'count_records'))  # 2
 ```
 
 YAML Configuration Format
@@ -74,10 +74,10 @@ import pandas as pd
 import yaml
 
 from quick_metric._apply_methods import apply_methods
-from quick_metric._exceptions import MetricSpecificationError
 from quick_metric._filter import apply_filter
-from quick_metric._method_definitions import METRICS_METHODS
-from quick_metric._output_formats import OutputFormat, convert_to_format
+from quick_metric.exceptions import MetricSpecificationError
+from quick_metric.registry import METRICS_METHODS
+from quick_metric.store import MetricsStore
 
 
 def _normalize_method_specs(method_input) -> Sequence[Union[str, dict]]:
@@ -184,9 +184,12 @@ def interpret_metric_instructions(
     data: pd.DataFrame,
     metric_instructions: dict,
     metrics_methods: Optional[dict] = None,
-) -> dict:
+) -> MetricsStore:
     """
     Apply filters and methods from metric instructions to a DataFrame.
+
+    Creates MetricResult objects directly and returns them in a MetricsStore
+    with proper dimension indexing.
 
     Parameters
     ----------
@@ -199,8 +202,8 @@ def interpret_metric_instructions(
 
     Returns
     -------
-    Dict
-        Dictionary with metric names as keys and method results as values.
+    MetricsStore
+        Store containing typed MetricResult objects with dimension indexing.
 
     Raises
     ------
@@ -221,7 +224,7 @@ def interpret_metric_instructions(
     if data.empty:
         logger.warning("Input DataFrame is empty")
 
-    results = {}
+    store = MetricsStore()
 
     for metric_name, metric_instruction in metric_instructions.items():
         with logger.contextualize(metric=metric_name):
@@ -254,61 +257,68 @@ def interpret_metric_instructions(
             # Normalize method specifications to handle various input formats
             normalized_methods = _normalize_method_specs(metric_instruction["method"])
 
-            # Apply methods to filtered data
+            # Apply methods to filtered data and add results directly to store
             with logger.contextualize(methods=normalized_methods):
-                results[metric_name] = apply_methods(
+                apply_methods(
                     data=filtered_data,
                     method_specs=normalized_methods,
                     metrics_methods=metrics_methods,
+                    store=store,
+                    metric_name=metric_name,
                 )
 
             logger.success("Metric completed successfully")
 
-    logger.success(f"Successfully processed all {len(results)} metrics")
-    return results
+    logger.success(f"Successfully processed all {len(metric_instructions)} metrics")
+    return store
 
 
 def generate_metrics(
     data: pd.DataFrame,
     config: Union[Path, dict],
     metrics_methods: Optional[dict] = None,
-    output_format: Union[str, OutputFormat] = "nested",
-) -> Union[dict, pd.DataFrame, list[dict]]:
+) -> MetricsStore:
     """
-    Generate metrics from data using configuration (main entry point).
+    Generate metrics from data and return a MetricsStore.
 
-    This is the primary entry point for the quick_metric framework. It provides
-    a simple interface for generating metrics from pandas DataFrames using
-    either YAML configuration files or dictionary configurations.
+    Dimensions are intrinsic to the data returned by methods - they are NOT
+    passed as global parameters.
+
+    This is the primary entry point for the quick_metric framework. It executes
+    metric methods on filtered data and returns a MetricsStore containing typed
+    results (Scalar, Series, DataFrame).
 
     Parameters
     ----------
     data : pd.DataFrame
-        The DataFrame to process and generate metrics from.
-    config : Path or Dict
-        Either a Path object pointing to a YAML configuration file or a
-        dictionary containing metric instructions. If a Path, the YAML file
-        should contain a 'metric_instructions' key with the configuration.
-    metrics_methods : Dict, optional
-        Dictionary of available methods. If None, uses the default registered
-        methods from METRICS_METHODS.
-    output_format : str or OutputFormat, default "nested"
-        Format for the output. Options:
-        - "nested": Current dict of dicts format {'metric': {'method': result}}
-        - "dataframe": Pandas DataFrame with columns [metric, method, value, value_type]
-        - "records": List of dicts [{'metric': '...', 'method': '...', 'value': ...}]
+        The DataFrame to process
+    config : Path or dict
+        Path to a YAML configuration file or a dictionary of metric instructions.
+
+        Expected dict structure:
+        ```python
+        {
+            'metric_name': {
+                'method': ['method1', 'method2'],  # or single string
+                'filter': {...}  # filter specification
+            }
+        }
+        ```
+    metrics_methods : dict, optional
+        Custom metrics methods registry. If None, uses the global registry.
 
     Returns
     -------
-    Union[dict, pd.DataFrame, list[dict]]
-        Results in the specified format. The exact type depends on output_format:
-        - dict: When output_format="nested" (default)
-        - pd.DataFrame: When output_format="dataframe"
-        - list[dict]: When output_format="records"
+    MetricsStore
+        Store containing all metric results as typed MetricResult objects.
+        Results contain dimensions intrinsic to the data structure:
+        - ScalarResult: no dimensions
+        - SeriesResult: one dimension (the index)
+        - DataFrameResult: N dimensions (all columns except value_column)
 
     Examples
     --------
-    Using a dictionary configuration (default nested format):
+    Using a dictionary configuration:
 
     ```python
     import pandas as pd
@@ -325,22 +335,43 @@ def generate_metrics(
             'filter': {'category': 'A'}
         }
     }
-    results = generate_metrics(data, config)
-    # Returns: {'category_a_count': {'count_records': 2}}
+
+    store = generate_metrics(data, config)
+
+    # Access the value
+    count = store.value('category_a_count', 'count_records')  # 2
+
+    # Or get the result object
+    result = store['category_a_count', 'count_records']
+    print(result.data)  # 2
     ```
 
-    Using DataFrame output format:
+    Working with dimensional data:
 
     ```python
-    df_results = generate_metrics(data, config, output_format="dataframe")
-    # Returns: DataFrame with columns [metric, method, value, value_type]
+    @metric_method
+    def count_by_category(data):
+        # Returns Series with category as dimension
+        return data.groupby('category').size()
+
+    store = generate_metrics(data, {'counts': {'method': ['count_by_category']}})
+
+    result = store['counts', 'count_by_category']
+    print(result.dimensions())  # ['category']
+    print(result.data)  # Series with category index
     ```
 
-    Using records output format:
+    Export to different formats:
 
     ```python
-    records = generate_metrics(data, config, output_format="records")
-    # Returns: [{'metric': 'category_a_count', 'method': 'count_records', 'value': 2}]
+    # As nested dict
+    nested = store.to_nested_dict()
+    # {'category_a_count': {'count_records': 2}}
+
+    # As flat DataFrame
+    df = store.to_dataframe()
+    # metric            method          value  date     site
+    # category_a_count  count_records   2      2025-01  R0A
     ```
 
     Using a YAML file:
@@ -348,7 +379,7 @@ def generate_metrics(
     ```python
     from pathlib import Path
     config_path = Path('my_metrics.yaml')
-    results = generate_metrics(data, config_path)
+    store = generate_metrics(data, config_path)
     ```
 
     Raises
@@ -357,20 +388,9 @@ def generate_metrics(
         If the config path does not exist.
     MetricSpecificationError
         If a YAML file doesn't contain 'metric_instructions' key or is invalid.
-        If config parameter or output_format is not a valid type.
+        If config parameter is not a valid type.
     """
     logger.info("Starting metric generation")
-
-    # Convert string format to enum
-    if isinstance(output_format, str):
-        try:
-            output_format = OutputFormat(output_format)
-        except ValueError as e:
-            valid_formats = [f.value for f in OutputFormat]
-            raise MetricSpecificationError(
-                f"Invalid output_format '{output_format}'. Valid options: {valid_formats}",
-                method_spec=output_format,
-            ) from e
 
     # Handle different config input types
     if isinstance(config, Path):
@@ -384,17 +404,12 @@ def generate_metrics(
             f"Config must be a pathlib.Path object or dict, got {type(config)}", method_spec=config
         )
 
-    # Generate metrics using the existing function
-    results = interpret_metric_instructions(
+    # Generate metrics and return MetricsStore directly
+    store = interpret_metric_instructions(
         data=data,
         metric_instructions=metric_instructions,
         metrics_methods=metrics_methods,
     )
 
-    # Convert to requested format
-    if output_format != OutputFormat.NESTED:
-        logger.debug(f"Converting results to {output_format.value} format")
-        results = convert_to_format(results, output_format)
-
-    logger.success("Metric generation completed successfully")
-    return results
+    logger.success(f"Generated {len(store)} metric results")
+    return store

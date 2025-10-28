@@ -27,7 +27,7 @@ from typing import Callable
 
 from loguru import logger
 
-from quick_metric._exceptions import (
+from quick_metric.exceptions import (
     EmptyRegistryError,
     InvalidMethodSignatureError,
     MethodNotFoundError,
