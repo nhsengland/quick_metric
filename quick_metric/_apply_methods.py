@@ -15,7 +15,8 @@ Apply a single method:
 
 ```python
 import pandas as pd
-from quick_metric._method_definitions import metric_method
+```python
+from quick_metric.registry import metric_method
 from quick_metric._apply_methods import apply_method
 
 @metric_method
@@ -48,11 +49,12 @@ from typing import Any, Callable, Optional
 from loguru import logger
 import pandas as pd
 
-from quick_metric._exceptions import (
+from quick_metric.exceptions import (
     MetricsMethodNotFoundError,
     MetricSpecificationError,
 )
-from quick_metric._method_definitions import METRICS_METHODS
+from quick_metric.registry import METRICS_METHODS
+from quick_metric.store import MetricsStore
 
 
 def apply_method(
@@ -146,13 +148,18 @@ def apply_methods(
     data: pd.DataFrame,
     method_specs: list[str | dict],
     metrics_methods: Optional[dict[str, Callable]] = None,
-) -> dict[str, Any]:
+    store: Optional[MetricsStore] = None,
+    metric_name: Optional[str] = None,
+) -> Optional[dict[str, Any]]:
     """
     Apply multiple methods to the data.
     The methods are specified by their names or as parameter dictionaries and are
     looked up in the metrics_methods dictionary.
     The results are returned in a dictionary where the keys are method names
     (potentially with parameters) and the values are the results of applying the methods.
+
+    If store and metric_name are provided, results are added directly to the store
+    instead of being collected in a dict (more efficient, avoids secondary loop).
 
     Parameters
     ----------
@@ -165,18 +172,37 @@ def apply_methods(
     metrics_methods : Dict[str, Callable], optional
         A dictionary of metrics methods. Defaults to METRICS_METHODS.
         This dictionary maps method names to their corresponding functions.
+    store : MetricsStore, optional
+        If provided, results will be added directly to this store instead of
+        being returned in a dictionary. Requires metric_name to also be provided.
+    metric_name : str, optional
+        The metric name to use when adding results to the store. Required if
+        store is provided.
 
     Returns
     -------
-    Dict[str, Any]
-        A dictionary where the keys are the method names (with parameters if any)
-        and the values are the results of applying the methods.
+    Dict[str, Any] or None
+        If store is None: A dictionary where the keys are the method names
+        (with parameters if any) and the values are the results of applying the methods.
+        If store is provided: None (results added directly to store)
     """
     if not metrics_methods:
         metrics_methods = METRICS_METHODS
 
+    if store is not None and metric_name is None:
+        raise ValueError("metric_name must be provided when store is provided")
+
     logger.debug(f"Applying {len(method_specs)} methods: {method_specs}")
 
+    # If store provided, add results directly (no intermediate dict)
+    if store is not None:
+        for method_spec in method_specs:
+            result_key, result_value = apply_method(data, method_spec, metrics_methods)
+            store.add_from_method(metric_name, result_key, result_value)
+        logger.success(f"Successfully applied all {len(method_specs)} methods")
+        return None
+
+    # Legacy behavior: collect results in dict
     results = {}
     for method_spec in method_specs:
         result_key, result_value = apply_method(data, method_spec, metrics_methods)
