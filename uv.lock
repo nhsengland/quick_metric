@@ -1326,6 +1326,7 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
@@ -1336,11 +1337,6 @@ docs = [
     { name = "mkdocs-material" },
     { name = "mkdocstrings" },
     { name = "mkdocstrings-python" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pre-commit" },
 ]
 
 [package.metadata]
@@ -1354,6 +1350,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "oops-its-a-pipeline", git = "https://github.com/nhsengland/oops-its-a-pipeline.git" },
     { name = "pandas", specifier = ">=2.0.0" },
+    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.3.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.0.0" },
@@ -1361,9 +1358,6 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
 ]
 provides-extras = ["dev", "docs"]
-
-[package.metadata.requires-dev]
-dev = [{ name = "pre-commit", specifier = ">=4.3.0" }]
 
 [[package]]
 name = "requests"
