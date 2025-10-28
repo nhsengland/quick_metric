@@ -7,13 +7,13 @@ import pandas as pd
 import pytest
 import yaml
 
-from quick_metric import generate_metrics
-from quick_metric._core import (
+from quick_metric import MetricsStore, generate_metrics
+from quick_metric.core import (
     _normalize_method_specs,
     interpret_metric_instructions,
     read_metric_instructions,
 )
-from quick_metric._exceptions import MetricSpecificationError
+from quick_metric.exceptions import MetricSpecificationError
 
 
 class TestGenerateMetrics:
@@ -21,17 +21,18 @@ class TestGenerateMetrics:
 
     def test_generate_metrics_with_dict_config(self):
         """Test generate_metrics with dictionary configuration."""
-        results = self._run_generate_metrics_test()
+        store = self._run_generate_metrics_test()
 
-        # Basic smoke test - ensure it returns a dict with expected structure
-        assert isinstance(results, dict)
-        assert len(results) == 2
+        # Basic smoke test - ensure it returns a MetricsStore with expected structure
+        assert isinstance(store, MetricsStore)
+        assert len(store) == 4  # 2 metrics × 2 methods each
+        assert len(store.metrics()) == 2
 
     @pytest.mark.parametrize("expected_metric", ["category_a_metrics", "category_b_metrics"])
     def test_generate_metrics_contains_expected_metrics(self, expected_metric):
         """Test that generate_metrics returns expected metric keys."""
-        results = self._run_generate_metrics_test()
-        assert expected_metric in results
+        store = self._run_generate_metrics_test()
+        assert expected_metric in store.metrics()
 
     @pytest.mark.parametrize(
         ("metric_name", "method_name", "expected_value"),
@@ -44,8 +45,8 @@ class TestGenerateMetrics:
     )
     def test_generate_metrics_method_values(self, metric_name, method_name, expected_value):
         """Test that generate_metrics returns correct method values."""
-        results = self._run_generate_metrics_test()
-        assert results[metric_name][method_name] == expected_value
+        store = self._run_generate_metrics_test()
+        assert store.value(metric_name, method_name) == expected_value
 
     def _run_generate_metrics_test(self):
         """Helper method to run the generate_metrics test scenario."""
@@ -77,8 +78,8 @@ class TestGenerateMetrics:
 
         config = {"all_records": {"method": ["count_records"], "filter": {}}}
 
-        results = generate_metrics(data, config)
-        assert results["all_records"]["count_records"] == 2
+        store = generate_metrics(data, config)
+        assert store.value("all_records", "count_records") == 2
 
     def test_generate_metrics_invalid_config_type(self):
         """Test generate_metrics with invalid config type."""
@@ -103,8 +104,8 @@ class TestGenerateMetrics:
         config = {"test": {"method": ["count_records"], "filter": {}}}
 
         # Should handle empty dataframe gracefully
-        result = generate_metrics(empty_data, config)
-        assert result == {"test": {"count_records": 0}}
+        store = generate_metrics(empty_data, config)
+        assert store.value("test", "count_records") == 0
 
     @pytest.mark.parametrize(
         ("config", "expected_error"),
@@ -129,14 +130,13 @@ class TestGenerateMetrics:
             interpret_metric_instructions(data, config)
 
     def test_generate_metrics_invalid_output_format(self):
-        """Test generate_metrics with invalid output format string."""
+        """Test generate_metrics - output_format parameter removed in v2.0."""
         data = pd.DataFrame({"col": [1, 2, 3]})
         config = {"test": {"method": ["count_records"], "filter": {}}}
 
-        with pytest.raises(
-            MetricSpecificationError, match="Invalid output_format 'invalid_format'"
-        ):
-            generate_metrics(data, config, output_format="invalid_format")
+        # output_format parameter no longer exists
+        with pytest.raises(TypeError, match="output_format"):
+            generate_metrics(data, config, output_format="invalid_format")  # type: ignore
 
     def test_generate_metrics_invalid_config_type_detailed(self):
         """Test generate_metrics with invalid config type (not Path or dict)."""
@@ -149,23 +149,27 @@ class TestGenerateMetrics:
             generate_metrics(data, invalid_config)  # type: ignore
 
     def test_generate_metrics_with_flat_output_format(self):
-        """Test generate_metrics with flat_dataframe output format conversion."""
+        """Test generate_metrics returns MetricsStore which can export to DataFrame."""
         data = pd.DataFrame({"category": ["A", "B"], "value": [10, 20]})
         config = {"test_metric": {"method": ["count_records"], "filter": {}}}
 
-        result = generate_metrics(data, config, output_format="flat_dataframe")
+        store = generate_metrics(data, config)
 
-        # Should be a DataFrame (flat format)
+        # Can export to DataFrame
+        result = store.to_dataframe()
         assert isinstance(result, pd.DataFrame)
+        assert len(result) > 0
 
     def test_generate_metrics_with_records_output_format(self):
-        """Test generate_metrics with records output format conversion."""
+        """Test generate_metrics returns MetricsStore which can export to records."""
         data = pd.DataFrame({"category": ["A", "B"], "value": [10, 20]})
         config = {"test_metric": {"method": ["count_records"], "filter": {}}}
 
-        result = generate_metrics(data, config, output_format="records")
+        store = generate_metrics(data, config)
 
-        # Should be a list of dictionaries
+        # Can export to DataFrame then records
+        df = store.to_dataframe()
+        result = df.to_dict("records")
         assert isinstance(result, list)
         assert len(result) > 0
         assert isinstance(result[0], dict)
@@ -240,7 +244,8 @@ class TestInterpretMetricInstructions:
         data = pd.DataFrame({"col": [1, 2, 3]})
 
         result = interpret_metric_instructions(data, {})
-        assert result == {}
+        assert isinstance(result, MetricsStore)
+        assert len(result) == 0
 
     def test_with_custom_metrics_methods(self):
         """Test interpret_metric_instructions with custom methods dict."""
@@ -257,7 +262,8 @@ class TestInterpretMetricInstructions:
         result = interpret_metric_instructions(data, config, custom_methods)
 
         # Should have 2 rows with category "A", so custom_method returns 2 * 2 = 4
-        assert result["test_metric"]["custom_method"] == 4
+        assert isinstance(result, MetricsStore)
+        assert result.value("test_metric", "custom_method") == 4
 
 
 class TestNormalizeMethodSpecs:

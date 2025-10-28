@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from quick_metric._apply_methods import apply_method, apply_methods
-from quick_metric._exceptions import (
+from quick_metric.exceptions import (
     MetricsMethodNotFoundError,
     MetricSpecificationError,
 )

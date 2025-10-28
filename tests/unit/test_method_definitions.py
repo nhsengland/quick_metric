@@ -2,13 +2,13 @@
 
 import pytest
 
-from quick_metric._exceptions import (
+from quick_metric.exceptions import (
     EmptyRegistryError,
     InvalidMethodSignatureError,
     MethodNotFoundError,
     RegistryLockError,
 )
-from quick_metric._method_definitions import (
+from quick_metric.registry import (
     METRICS_METHODS,
     MetricRegistry,
     _registry,
@@ -24,8 +24,14 @@ class TestMetricMethodDecorator:
     """Test the metric_method decorator."""
 
     def setup_method(self):
-        """Clear registry before each test."""
+        """Save registry and clear before each test."""
+        self._saved_methods = METRICS_METHODS.copy()
         clear_methods()
+
+    def teardown_method(self):
+        """Restore registry after each test."""
+        METRICS_METHODS.clear()
+        METRICS_METHODS.update(self._saved_methods)
 
     @pytest.mark.parametrize("function_name", ["test_function", "another_test", "custom_func"])
     def test_decorator_registers_function(self, function_name):
@@ -111,8 +117,14 @@ class TestGetMethod:
     """Test the get_method function."""
 
     def setup_method(self):
-        """Clear registry before each test."""
+        """Save registry and clear before each test."""
+        self._saved_methods = METRICS_METHODS.copy()
         clear_methods()
+
+    def teardown_method(self):
+        """Restore registry after each test."""
+        METRICS_METHODS.clear()
+        METRICS_METHODS.update(self._saved_methods)
 
     def test_get_method_returns_registered_function(self):
         """Test getting a registered method by name."""
@@ -149,8 +161,14 @@ class TestClearMethods:
     """Test the clear_methods function."""
 
     def setup_method(self):
-        """Clear registry before each test."""
+        """Save registry and clear before each test."""
+        self._saved_methods = METRICS_METHODS.copy()
         clear_methods()
+
+    def teardown_method(self):
+        """Restore registry after each test."""
+        METRICS_METHODS.clear()
+        METRICS_METHODS.update(self._saved_methods)
 
     def test_clear_removes_all_methods(self):
         """Test that clear removes all registered methods."""
@@ -168,8 +186,14 @@ class TestComplexFunctionSignatures:
     """Test decorator with various function signatures."""
 
     def setup_method(self):
-        """Clear registry before each test."""
+        """Save registry and clear before each test."""
+        self._saved_methods = METRICS_METHODS.copy()
         clear_methods()
+
+    def teardown_method(self):
+        """Restore registry after each test."""
+        METRICS_METHODS.clear()
+        METRICS_METHODS.update(self._saved_methods)
 
     def test_function_with_multiple_parameters(self):
         """Test decorator works with multiple parameter functions."""

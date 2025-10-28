@@ -10,13 +10,13 @@ from oops_its_a_pipeline.exceptions import PipelineStageValidationError
 import pandas as pd
 import pytest
 
-from quick_metric._exceptions import RegistryLockError
-from quick_metric._method_definitions import metric_method
+from quick_metric.exceptions import RegistryLockError
 import quick_metric.pipeline as pipeline_module
 from quick_metric.pipeline import (
     GenerateMetricsStage,
     create_metrics_stage,
 )
+from quick_metric.registry import metric_method
 
 
 @pytest.fixture
@@ -192,8 +192,10 @@ class TestPipelineIntegration:
 
         result_context = stage.run(context)
         assert "metrics" in result_context
-        assert "nested_metric" in result_context["metrics"]
-        assert result_context["metrics"]["nested_metric"]["nested_test"] == 4
+        # MetricsStore is now returned
+        metrics = result_context["metrics"]
+        assert "nested_metric" in metrics.metrics()
+        assert metrics.value("nested_metric", "nested_test") == 4
 
     def test_stage_with_config_object_with_non_dict_config_attr(self, test_data, pipeline_config):
         """Test config object with non-dict config attribute."""
