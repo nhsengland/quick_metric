@@ -5,6 +5,15 @@ A framework for applying filters and methods to pandas DataFrames using
 YAML configurations. Register custom metric methods with decorators and
 configure data filtering through declarative specifications.
 
+The framework returns results in a MetricsStore, a typed container that
+preserves the structure of complex return types (DataFrames, Series, scalars)
+while providing powerful filtering and export capabilities.
+
+Classes
+-------
+MetricsStore : Container for metric results with filtering and export
+MetricResult : Base class for typed results (Scalar, Series, DataFrame)
+
 Functions
 ---------
 generate_metrics : Apply metric configurations to pandas DataFrames
@@ -38,26 +47,34 @@ config = {
     }
 }
 
-results = generate_metrics(data, config)
-print(results['category_a_metrics']['count_records'])  # 2
-print(results['category_a_metrics']['mean_value'])     # 20.0
+store = generate_metrics(data, config)
+
+# Access values
+count = store.value('category_a_metrics', 'count_records')  # 2
+mean = store.value('category_a_metrics', 'mean_value')      # 20.0
+
+# Export to different formats
+nested = store.to_nested_dict()
+flat = store.to_dataframe()
 ```
 """
 
-from quick_metric._core import generate_metrics
-from quick_metric._method_definitions import (
+from quick_metric.core import generate_metrics
+from quick_metric.registry import (
     clear_methods,
     get_method,
     get_registered_methods,
     list_method_names,
     metric_method,
 )
+from quick_metric.store import MetricsStore
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 
 __all__ = [
     "generate_metrics",
     "metric_method",
+    "MetricsStore",
     "get_method",
     "get_registered_methods",
     "list_method_names",
