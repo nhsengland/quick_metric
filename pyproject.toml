@@ -8,6 +8,7 @@ version = "0.0.1"
 description = "A framework for quickly creating metrics using easy to edit YAML configs and reusable methods to Filter, Calculate, and Transform data."
 authors = [
   { name = "Joseph Wilson", email = "joseph.wilson8@nhs.net" },
+  { name = "NHS England Data Science and Applied AI", email = "england.datascience@nhs.net"}
 ]
 license = { file = "LICENSE" }
 readme = "README.md"
