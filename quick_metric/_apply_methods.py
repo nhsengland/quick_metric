@@ -53,7 +53,7 @@ from quick_metric.exceptions import (
     MetricsMethodNotFoundError,
     MetricSpecificationError,
 )
-from quick_metric.registry import METRICS_METHODS
+from quick_metric.registry import METRICS_METHODS, MetricMethod
 from quick_metric.store import MetricsStore
 
 
@@ -196,9 +196,51 @@ def apply_methods(
 
     # If store provided, add results directly (no intermediate dict)
     if store is not None:
+        assert metric_name is not None  # Checked above
         for method_spec in method_specs:
-            result_key, result_value = apply_method(data, method_spec, metrics_methods)
-            store.add_from_method(metric_name, result_key, result_value)
+            # Parse method spec
+            if isinstance(method_spec, str):
+                method_name_str = method_spec
+                method_params = {}
+                result_key = method_name_str
+            elif isinstance(method_spec, dict):
+                method_name_str, method_params = next(iter(method_spec.items()))
+                # Generate result key with params
+                if method_params:
+                    param_repr = str(sorted(method_params.items()))
+                    if len(param_repr) > 50:
+                        param_hash = hashlib.md5(param_repr.encode()).hexdigest()[:8]
+                        result_key = f"{method_name_str}_{param_hash}"
+                    else:
+                        param_str = "_".join(f"{k}{v}" for k, v in sorted(method_params.items()))
+                        result_key = f"{method_name_str}_{param_str}"
+                else:
+                    result_key = method_name_str
+            else:
+                raise MetricSpecificationError(
+                    f"Method specification must be str or dict, got: {type(method_spec)}",
+                    method_spec,
+                )
+
+            # Get the method
+            try:
+                method = metrics_methods[method_name_str]
+            except KeyError as e:
+                logger.error(f"Method '{method_name_str}' not found in available methods")
+                raise MetricsMethodNotFoundError(
+                    method_name_str, list(metrics_methods.keys())
+                ) from e
+
+            # If it's a MetricMethod, use apply() to get MetricResult directly
+            if isinstance(method, MetricMethod):
+                result = method.apply(metric_name, data, **method_params)
+                # add() expects MetricResult and doesn't need conversion
+                store.add(result)
+            else:
+                # Plain callable - use old path
+                result_value = method(data, **method_params) if method_params else method(data)
+                store.add_from_method(metric_name, result_key, result_value)
+
         logger.success(f"Successfully applied all {len(method_specs)} methods")
         return None
 

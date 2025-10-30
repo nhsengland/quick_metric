@@ -279,14 +279,272 @@ class MetricsStore:
 
         return pd.DataFrame(all_records)
 
-    def to_nested_dict(self) -> dict[str, dict[str, Any]]:
-        """Export as nested dictionary: {metric: {method: data}}."""
+    def to_records(self, include_metadata: bool = False) -> list[dict[str, Any]]:
+        """
+        Convert to flat list of record dictionaries.
+
+        Parameters
+        ----------
+        include_metadata : bool, default False
+            If True, includes value_type and dimensions in each record
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of dictionaries, one per data point
+
+        Examples
+        --------
+        >>> records = store.to_records()
+        [
+            {'metric': 'completion_rate', 'method': 'overall', 'value': 0.95},
+            {'metric': 'completion_rate', 'method': 'by_site', 'site': 'R0A', 'value': 0.92},
+            ...
+        ]
+
+        >>> records_meta = store.to_records(include_metadata=True)
+        [
+            {'metric': 'completion_rate', 'method': 'overall', 'value': 0.95,
+             'value_type': 'scalar', 'dimensions': [], 'n_dimensions': 0},
+            ...
+        ]
+        """
+        all_records = []
+
+        for _, _, result in self.all():
+            records = result.to_records()
+
+            if include_metadata:
+                # Add metadata to each record
+                metadata = {
+                    "value_type": result.value_type(),
+                    "dimensions": result.dimensions(),
+                    "n_dimensions": len(result.dimensions()),
+                }
+                for record in records:
+                    record.update(metadata)
+
+            all_records.extend(records)
+
+        return all_records
+
+    def to_nested_dict(self, include_metadata: bool = False) -> dict[str, dict[str, Any]]:
+        """
+        Export as nested dictionary: {metric: {method: data}}.
+
+        Parameters
+        ----------
+        include_metadata : bool, default False
+            If True, wraps each result with metadata
+
+        Returns
+        -------
+        dict[str, dict[str, Any]]
+            Nested dictionary grouped by metric
+
+        Examples
+        --------
+        >>> nested = store.to_nested_dict()
+        {
+            'completion_rate': {
+                'overall': 0.95,
+                'by_site': pd.Series([...])
+            }
+        }
+
+        >>> nested_meta = store.to_nested_dict(include_metadata=True)
+        {
+            'completion_rate': {
+                'overall': {'data': 0.95, 'value_type': 'scalar', ...}
+            }
+        }
+        """
         nested = {}
         for (metric, method), result in self._results.items():
             if metric not in nested:
                 nested[metric] = {}
-            nested[metric][method] = result.data
+
+            if include_metadata:
+                nested[metric][method] = {
+                    "data": result.data,
+                    "value_type": result.value_type(),
+                    "dimensions": result.dimensions(),
+                }
+            else:
+                nested[metric][method] = result.data
+
         return nested
+
+    def to_dataframes(self, separate_scalars: bool = True) -> dict[str, pd.DataFrame]:
+        """
+        Convert to dictionary of DataFrames, one per metric.
+
+        Parameters
+        ----------
+        separate_scalars : bool, default True
+            If True, scalars go to '_scalars' key;
+            if False, scalars become single-row DataFrames
+
+        Returns
+        -------
+        dict[str, pd.DataFrame]
+            Dictionary mapping metric names to DataFrames
+
+        Examples
+        --------
+        >>> dfs = store.to_dataframes()
+        {
+            '_scalars': DataFrame with all scalar values,
+            'completion_rate': DataFrame with all methods for this metric,
+            'visit_counts': DataFrame with all methods for this metric
+        }
+        """
+        dataframes = {}
+        scalar_records = []
+
+        for metric, _, result in self.all():
+            records = result.to_records()
+
+            if result.value_type() == "scalar" and separate_scalars:
+                # Collect scalars separately
+                scalar_records.extend(records)
+            else:
+                # Create or append to metric-specific DataFrame
+                df = pd.DataFrame(records)
+
+                if metric in dataframes:
+                    dataframes[metric] = pd.concat([dataframes[metric], df], ignore_index=True)
+                else:
+                    dataframes[metric] = df
+
+        # Add scalars DataFrame if any exist
+        if scalar_records:
+            dataframes["_scalars"] = pd.DataFrame(scalar_records)
+
+        return dataframes
+
+    def to_dict_of_series(self) -> dict[tuple[str, str], pd.Series | Any]:
+        """
+        Convert to dictionary mapping (metric, method) to Series.
+
+        Returns
+        -------
+        dict[tuple[str, str], pd.Series | Any]
+            Dict with (metric, method) tuples as keys, Series/scalars as values
+
+        Examples
+        --------
+        >>> series_dict = store.to_dict_of_series()
+        {
+            ('completion_rate', 'overall'): 0.95,
+            ('completion_rate', 'by_site'): pd.Series([0.92, 0.98], index=['R0A', 'R0B'])
+        }
+
+        Note
+        ----
+        Converts single-column DataFrame results to Series automatically
+        """
+        result = {}
+
+        for metric, method, metric_result in self.all():
+            data = metric_result.data
+
+            # Convert single-column DataFrames to Series
+            if isinstance(data, pd.DataFrame) and len(data.columns) == 1:
+                data = data.iloc[:, 0]
+
+            result[(metric, method)] = data
+
+        return result
+
+    def to_dict_by_metric(self) -> dict[str, dict[str, Any]]:
+        """
+        Convert to dictionary grouped by metric: {metric: {method: data}}.
+
+        Alias for to_nested_dict() for clarity.
+
+        Returns
+        -------
+        dict[str, dict[str, Any]]
+            Nested dict grouped by metric
+        """
+        return self.to_nested_dict()
+
+    def to_dict_by_method(self) -> dict[str, dict[str, Any]]:
+        """
+        Convert to dictionary grouped by method: {method: {metric: data}}.
+
+        Useful when comparing same method across metrics.
+
+        Returns
+        -------
+        dict[str, dict[str, Any]]
+            Nested dict grouped by method
+
+        Examples
+        --------
+        >>> by_method = store.to_dict_by_method()
+        {
+            'overall': {
+                'completion_rate': 0.95,
+                'visit_count': 1234
+            },
+            'by_site': {
+                'completion_rate': pd.Series([...]),
+                'visit_count': pd.Series([...])
+            }
+        }
+        """
+        result = {}
+
+        for metric, method, metric_result in self.all():
+            if method not in result:
+                result[method] = {}
+
+            result[method][metric] = metric_result.data
+
+        return result
+
+    def to_datasets(self) -> dict[str, dict[str, pd.DataFrame]]:
+        """
+        Convert to nested dict of DataFrames: {metric: {method: DataFrame}}.
+
+        Converts all results (including scalars and Series) to DataFrames.
+
+        Returns
+        -------
+        dict[str, dict[str, pd.DataFrame]]
+            Nested dict with all values as DataFrames
+
+        Examples
+        --------
+        >>> datasets = store.to_datasets()
+        {
+            'completion_rate': {
+                'overall': DataFrame([[0.95]]),
+                'by_site': DataFrame with site index
+            }
+        }
+        """
+        result = {}
+
+        for metric, method, metric_result in self.all():
+            if metric not in result:
+                result[metric] = {}
+
+            # Convert to DataFrame
+            data = metric_result.data
+
+            if isinstance(data, pd.DataFrame):
+                df = data
+            elif isinstance(data, pd.Series):
+                df = data.to_frame(name="value")
+            else:  # scalar
+                df = pd.DataFrame({"value": [data]})
+
+            result[metric][method] = df
+
+        return result
 
     def summary(self) -> pd.DataFrame:
         """Get summary table of what\'s in the store."""
