@@ -47,7 +47,8 @@ def mean_value(data: pd.DataFrame, column: str = "value") -> float:
 def sum_values(data: pd.DataFrame, column: str = "value") -> float:
     """Calculate the sum of a specified column."""
     if column in data.columns:
-        return data[column].sum()
+        # Use Python's sum() to avoid numpy/pandas compatibility issues
+        return float(sum(data[column]))
     return 0.0
 
 
