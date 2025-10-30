@@ -17,7 +17,10 @@ from typing import Any
 from loguru import logger
 import pandas as pd
 
-from quick_metric.exceptions import MetricSpecificationError
+from quick_metric.exceptions import (
+    InvalidResultFormatError,
+    ValueColumnConflictWarning,
+)
 
 
 @dataclass
@@ -56,6 +59,116 @@ class MetricResult(ABC):
         - DataFrame: One record per row
         """
         ...
+
+    def to_dataframe(self) -> pd.DataFrame:
+        """
+        Convert to DataFrame regardless of underlying type.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame representation with metric and method columns
+        """
+        records = self.to_records()
+        return pd.DataFrame(records)
+
+    def to_dict(self, include_metadata: bool = False) -> dict | Any:
+        """
+        Convert to dictionary format.
+
+        Parameters
+        ----------
+        include_metadata : bool, default False
+            If True, wraps data with metadata (metric, method, value_type, dimensions)
+
+        Returns
+        -------
+        dict or Any
+            If include_metadata=True, returns dict with metadata.
+            If include_metadata=False, returns the raw data.
+
+        Examples
+        --------
+        >>> result = ScalarResult('total', 'count', 100)
+        >>> result.to_dict()  # 100
+        >>> result.to_dict(include_metadata=True)
+        # {'metric': 'total', 'method': 'count', 'value_type': 'scalar',
+        #  'dimensions': [], 'data': 100}
+        """
+        if include_metadata:
+            return {
+                "metric": self.metric,
+                "method": self.method,
+                "value_type": self.value_type(),
+                "dimensions": self.dimensions(),
+                "data": self.data,
+            }
+
+        return self.data
+
+    def to_series(self) -> pd.Series:
+        """
+        Convert to Series if possible.
+
+        Returns
+        -------
+        pd.Series
+            Series representation of the result
+
+        Raises
+        ------
+        ValueError
+            If result cannot be converted to Series (e.g., multi-column DataFrame)
+
+        Examples
+        --------
+        >>> result = ScalarResult('total', 'count', 100)
+        >>> result.to_series()
+        # Series([100], name='total_count')
+
+        >>> result = SeriesResult('by_site', 'count', pd.Series([10, 20], index=['A', 'B']))
+        >>> result.to_series()
+        # Returns the underlying Series
+        """
+        if isinstance(self.data, pd.Series):
+            return self.data
+
+        if isinstance(self.data, pd.DataFrame):
+            if len(self.data.columns) == 1:
+                return self.data.iloc[:, 0]
+
+            raise ValueError(
+                f"Cannot convert DataFrame with {len(self.data.columns)} "
+                "columns to Series. Use .to_dataframe() instead."
+            )
+
+        # Scalar
+        return pd.Series([self.data], name=f"{self.metric}_{self.method}")
+
+    def __repr__(self) -> str:
+        """String representation of the result."""
+        return (
+            f"{self.__class__.__name__}("
+            f"metric='{self.metric}', "
+            f"method='{self.method}', "
+            f"value_type='{self.value_type()}', "
+            f"dimensions={self.dimensions()})"
+        )
+
+    def __str__(self) -> str:
+        """User-friendly string representation."""
+        return f"{self.metric}.{self.method}: {self.value_type()}"
+
+    def _repr_html_(self) -> str:
+        """HTML representation for Jupyter notebooks."""
+        # Convert to DataFrame for nice rendering
+        df = self.to_dataframe()
+
+        html = f"<div><strong>{self.metric}.{self.method}</strong> "
+        html += f"<em>({self.value_type()})</em></div>"
+        html += df._repr_html_()
+
+        return html
 
     def matches(self, **filters) -> bool:
         """Check if this result matches the given filters."""
@@ -225,6 +338,37 @@ class DataFrameResult(MetricResult):
             records.append(record)
         return records
 
+    def get_column(self, column: str) -> pd.Series:
+        """
+        Extract a specific column as Series.
+
+        Parameters
+        ----------
+        column : str
+            Name of column to extract
+
+        Returns
+        -------
+        pd.Series
+            Series for the specified column
+
+        Raises
+        ------
+        KeyError
+            If column does not exist in the DataFrame
+
+        Examples
+        --------
+        >>> result = DataFrameResult('analysis', 'detailed', df, value_column='count')
+        >>> counts = result.get_column('count')
+        >>> sites = result.get_column('site')
+        """
+        if column not in self.data.columns:
+            raise KeyError(
+                f"Column '{column}' not found. Available columns: {list(self.data.columns)}"
+            )
+        return self.data[column]
+
 
 def create_result(
     metric: str,
@@ -301,10 +445,11 @@ def create_result(
             final_value_column = dict_value_column or value_column
 
             if dict_value_column and value_column and dict_value_column != value_column:
-                logger.warning(
-                    f"Method '{method}' for metric '{metric}': "
-                    f"value_column specified in both dict ('{dict_value_column}') "
-                    f"and parameter ('{value_column}'). Using dict value."
+                ValueColumnConflictWarning(  # pylint: disable=W0133
+                    metric=metric,
+                    method=method,
+                    dict_value=dict_value_column,
+                    param_value=value_column,
                 )
 
             # Recursively create result from extracted data
@@ -319,14 +464,10 @@ def create_result(
             return ScalarResult(metric=metric, method=method, data=data["value"])
 
         # Dict without recognized keys - raise error
-        raise MetricSpecificationError(
-            f"Method '{method}' for metric '{metric}': "
-            f"returned dict without 'data' or 'value' keys (got keys: {list(data.keys())}). "
-            f"Please return either:"
-            f"\n  - Direct data (scalar, Series, DataFrame)"
-            f"\n  - {{'data': your_data, 'value_column': 'col_name'}} for DataFrames"
-            f"\n  - {{'value': your_scalar}} for scalar values",
-            method_spec=data,
+        raise InvalidResultFormatError(
+            metric=metric,
+            method=method,
+            returned_keys=list(data.keys()),
         )
 
     # Handle pandas types
