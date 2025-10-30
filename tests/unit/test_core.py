@@ -115,10 +115,7 @@ class TestGenerateMetrics:
                 {"metric2": {"filter": {}}},  # Missing 'method'
                 "Metric 'metric2' missing required 'method' key",
             ),
-            (
-                {"metric3": {"method": ["count_records"]}},  # Missing 'filter'
-                "Metric 'metric3' missing required 'filter' key",
-            ),
+            # Note: filter is now optional, so missing filter is no longer an error
         ],
     )
     def test_generate_metrics_invalid_structure(self, config, expected_error):
@@ -128,6 +125,18 @@ class TestGenerateMetrics:
 
         with pytest.raises(MetricSpecificationError, match=expected_error):
             interpret_metric_instructions(data, config)
+
+    def test_generate_metrics_filter_optional(self):
+        """Test that filter key is optional in metric configuration."""
+        data = pd.DataFrame({"col": [1, 2, 3]})
+
+        # Config without filter key
+        config = {"test_metric": {"method": ["count_records"]}}
+
+        store = interpret_metric_instructions(data, config)
+
+        # Should use all data (no filtering)
+        assert store.value("test_metric", "count_records") == 3
 
     def test_generate_metrics_invalid_output_format(self):
         """Test generate_metrics - output_format parameter removed in v2.0."""
