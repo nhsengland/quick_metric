@@ -75,7 +75,7 @@ import yaml
 
 from quick_metric._apply_methods import apply_methods
 from quick_metric._filter import apply_filter
-from quick_metric.exceptions import MetricSpecificationError
+from quick_metric.exceptions import MetricSpecificationError, MetricSpecificationWarning
 from quick_metric.registry import METRICS_METHODS
 from quick_metric.store import MetricsStore
 
@@ -243,14 +243,18 @@ def interpret_metric_instructions(
                     method_spec=metric_instruction,
                 )
 
+            # Apply filter to data (filter is optional, defaults to no filtering)
             if "filter" not in metric_instruction:
-                raise MetricSpecificationError(
-                    f"Metric '{metric_name}' missing required 'filter' key",
-                    method_spec=metric_instruction,
+                MetricSpecificationWarning(
+                    metric_name,
+                    "No 'filter' key specified",
+                    "All data will be used. Consider adding 'filter: {}' to be explicit",
                 )
+                filter_spec = {}
+            else:
+                filter_spec = metric_instruction["filter"]
 
-            # Apply filter to data
-            filtered_data = apply_filter(data_df=data, filters=metric_instruction["filter"])
+            filtered_data = apply_filter(data_df=data, filters=filter_spec)
 
             logger.trace(f"Filtered to {len(filtered_data)} rows")
 
