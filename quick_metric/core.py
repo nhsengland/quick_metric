@@ -48,6 +48,7 @@ YAML Configuration Format
 --------------------------
 ```yaml
 metric_instructions:
+  split_by: 'region'  # Optional: split data by column(s)
   metric_name:
     method: ['method1', 'method2']
     filter:
@@ -55,6 +56,7 @@ metric_instructions:
       and:
         condition1: value1
         condition2: value2
+    split_by: ['region', 'site']  # Optional: override global split
 ```
 
 See Also
@@ -64,120 +66,19 @@ apply_methods : Method execution functionality used by this module
 method_definitions : Method registration system used by this module
 """
 
-from collections.abc import Sequence
-from functools import cache
 from pathlib import Path
 from typing import Optional, Union
 
 from loguru import logger
 import pandas as pd
-import yaml
 
 from quick_metric._apply_methods import apply_methods
+from quick_metric._config import normalize_method_specs, read_metric_instructions
 from quick_metric._filter import apply_filter
+from quick_metric._split import normalize_split_by, process_with_split
 from quick_metric.exceptions import MetricSpecificationError, MetricSpecificationWarning
 from quick_metric.registry import METRICS_METHODS
 from quick_metric.store import MetricsStore
-
-
-def _normalize_method_specs(method_input) -> Sequence[Union[str, dict]]:
-    """
-    Normalize various method specification formats into Sequence[str | dict].
-
-    Handles these input formats:
-    - str: "method_name" -> ["method_name"]
-    - list of str: ["method1", "method2"] -> ["method1", "method2"]
-    - dict: {"method": {"param": "value"}} -> [{"method": {"param": "value"}}]
-    - list of mixed: ["method1", {"method2": {"param": "value"}}] -> unchanged
-
-    Parameters
-    ----------
-    method_input : str | list | dict
-        Method specification in various formats
-
-    Returns
-    -------
-    Sequence[str | dict]
-        Normalized sequence of method specifications
-
-    Raises
-    ------
-    MetricSpecificationError
-        If the method specification format is invalid.
-    """
-    if isinstance(method_input, str):
-        # Single method name as string
-        return [method_input]
-    if isinstance(method_input, list):
-        # Already a list - validate contents and return
-        for item in method_input:
-            if not isinstance(item, (str, dict)):
-                raise MetricSpecificationError(
-                    f"Method list items must be str or dict, got {type(item)}: {item}",
-                    method_spec=method_input,
-                )
-        return method_input
-    if isinstance(method_input, dict):
-        # Single method with parameters - convert to list
-        return [method_input]
-
-    raise MetricSpecificationError(
-        f"Method specification must be str, list, or dict, got {type(method_input)}: "
-        f"{method_input}",
-        method_spec=method_input,
-    )
-
-
-@cache
-def read_metric_instructions(metric_config_path: Path) -> dict:
-    """
-    Read metric_instructions dictionary from a YAML config file.
-
-    Parameters
-    ----------
-    metric_config_path : Path
-        Path to the YAML config file containing metric instructions.
-
-    Returns
-    -------
-    Dict
-        The 'metric_instructions' dictionary from the YAML file.
-
-    Raises
-    ------
-    FileNotFoundError
-        If the configuration file does not exist.
-    MetricSpecificationError
-        If the YAML file is invalid or missing metric_instructions.
-    """
-    logger.info(f"Reading metric configuration from {metric_config_path}")
-
-    if not metric_config_path.exists():
-        raise FileNotFoundError(f"Configuration file not found: {metric_config_path}")
-
-    try:
-        with open(metric_config_path, encoding="utf-8") as file:
-            metric_configs = yaml.safe_load(file)
-
-        if not isinstance(metric_configs, dict):
-            raise MetricSpecificationError(
-                "Configuration file must contain a YAML dictionary",
-                method_spec=str(metric_config_path),
-            )
-
-        metric_instructions = metric_configs.get("metric_instructions", {})
-
-        if not metric_instructions:
-            logger.warning("No 'metric_instructions' found in configuration file")
-        else:
-            logger.success(f"Loaded {len(metric_instructions)} metric configurations")
-
-        return metric_instructions
-
-    except yaml.YAMLError as e:
-        raise MetricSpecificationError(
-            f"Invalid YAML in configuration file: {e}", method_spec=str(metric_config_path)
-        ) from e
 
 
 def interpret_metric_instructions(
@@ -195,9 +96,10 @@ def interpret_metric_instructions(
     ----------
     data : pd.DataFrame
         The DataFrame to be processed.
-    metric_instructions : Dict
+    metric_instructions : dict
         Dictionary containing the metrics and their filter/method conditions.
-    metrics_methods : Dict, optional
+        May include a top-level 'split_by' key to apply globally.
+    metrics_methods : dict, optional
         Dictionary of available methods. Defaults to METRICS_METHODS.
 
     Returns
@@ -209,6 +111,58 @@ def interpret_metric_instructions(
     ------
     MetricSpecificationError
         If metric instructions are invalid or missing required keys.
+
+    Examples
+    --------
+    Simple scalar metrics:
+    ```python
+    config = {
+        'total_count': {
+            'method': ['count_records'],
+            'filter': {}
+        }
+    }
+    store = interpret_metric_instructions(data, config)
+    # ScalarResult: 1000
+    ```
+
+    With global split_by (scalar → series):
+    ```python
+    config = {
+        'split_by': 'region',
+        'total_count': {
+            'method': ['count_records'],
+            'filter': {}
+        }
+    }
+    store = interpret_metric_instructions(data, config)
+    # SeriesResult: region=[R1: 400, R2: 600]
+    ```
+
+    With multiple splits (scalar → dataframe):
+    ```python
+    config = {
+        'split_by': ['region', 'site'],
+        'total_count': {
+            'method': ['count_records'],
+            'filter': {}
+        }
+    }
+    store = interpret_metric_instructions(data, config)
+    # DataFrameResult with MultiIndex: (region, site)
+    ```
+
+    Metric-level override:
+    ```python
+    config = {
+        'split_by': 'region',
+        'total_count': {
+            'method': ['count_records'],
+            'filter': {},
+            'split_by': ['region', 'site']  # Override with more granular split
+        }
+    }
+    ```
     """
     if metrics_methods is None:
         metrics_methods = METRICS_METHODS
@@ -224,9 +178,18 @@ def interpret_metric_instructions(
     if data.empty:
         logger.warning("Input DataFrame is empty")
 
+    # Extract and normalize global split_by
+    global_split_by = normalize_split_by(metric_instructions.get("split_by"))
+    if global_split_by:
+        logger.info(f"Global split_by configured: {global_split_by}")
+
     store = MetricsStore()
 
     for metric_name, metric_instruction in metric_instructions.items():
+        # Skip the split_by key itself
+        if metric_name == "split_by":
+            continue
+
         with logger.contextualize(metric=metric_name):
             logger.trace("Processing metric")
 
@@ -243,7 +206,13 @@ def interpret_metric_instructions(
                     method_spec=metric_instruction,
                 )
 
-            # Apply filter to data (filter is optional, defaults to no filtering)
+            # Determine split_by for this metric (metric-level overrides global)
+            split_by = normalize_split_by(metric_instruction.get("split_by", global_split_by))
+
+            if split_by:
+                logger.debug(f"Splitting by: {split_by}")
+
+            # Apply filter
             if "filter" not in metric_instruction:
                 MetricSpecificationWarning(
                     metric_name,
@@ -255,21 +224,30 @@ def interpret_metric_instructions(
                 filter_spec = metric_instruction["filter"]
 
             filtered_data = apply_filter(data_df=data, filters=filter_spec)
-
             logger.trace(f"Filtered to {len(filtered_data)} rows")
 
-            # Normalize method specifications to handle various input formats
-            normalized_methods = _normalize_method_specs(metric_instruction["method"])
+            # Normalize method specifications
+            normalized_methods = normalize_method_specs(metric_instruction["method"])
 
-            # Apply methods to filtered data and add results directly to store
-            with logger.contextualize(methods=normalized_methods):
-                apply_methods(
+            # Process with or without splitting
+            if split_by:
+                process_with_split(
                     data=filtered_data,
+                    split_by=split_by,
                     method_specs=normalized_methods,
                     metrics_methods=metrics_methods,
                     store=store,
                     metric_name=metric_name,
                 )
+            else:
+                with logger.contextualize(methods=normalized_methods):
+                    apply_methods(
+                        data=filtered_data,
+                        method_specs=normalized_methods,
+                        metrics_methods=metrics_methods,
+                        store=store,
+                        metric_name=metric_name,
+                    )
 
             logger.success("Metric completed successfully")
 
