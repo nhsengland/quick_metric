@@ -8,6 +8,7 @@ version = "0.0.1"
 description = "A framework for quickly creating metrics using easy to edit YAML configs and reusable methods to Filter, Calculate, and Transform data."
 authors = [
   { name = "Joseph Wilson", email = "joseph.wilson8@nhs.net" },
+  { name = "NHS England Data Science and Applied AI", email = "england.datascience@nhs.net"}
 ]
 license = { file = "LICENSE" }
 readme = "README.md"
@@ -30,6 +31,7 @@ dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "pytest-mock>=3.0.0",
+    "pytest-xdist>=3.0.0",
     "ruff>=0.1.0",
     "pre-commit>=4.3.0",
 ]
@@ -108,3 +110,8 @@ skip_covered = false
 
 [tool.coverage.html]
 directory = "htmlcov"
+
+[tool.pytest.ini_options]
+# addopts = "-n auto"
+testpaths = ["tests"]
+log_cli = false

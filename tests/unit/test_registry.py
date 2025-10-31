@@ -1,15 +1,16 @@
-"""Unit tests for method_definitions module."""
+"""Unit tests for registry module."""
 
 import pytest
 
-from quick_metric._exceptions import (
+from quick_metric.exceptions import (
     EmptyRegistryError,
     InvalidMethodSignatureError,
     MethodNotFoundError,
     RegistryLockError,
 )
-from quick_metric._method_definitions import (
+from quick_metric.registry import (
     METRICS_METHODS,
+    MetricMethod,
     MetricRegistry,
     _registry,
     clear_methods,
@@ -24,8 +25,14 @@ class TestMetricMethodDecorator:
     """Test the metric_method decorator."""
 
     def setup_method(self):
-        """Clear registry before each test."""
+        """Save registry and clear before each test."""
+        self._saved_methods = METRICS_METHODS.copy()
         clear_methods()
+
+    def teardown_method(self):
+        """Restore registry after each test."""
+        METRICS_METHODS.clear()
+        METRICS_METHODS.update(self._saved_methods)
 
     @pytest.mark.parametrize("function_name", ["test_function", "another_test", "custom_func"])
     def test_decorator_registers_function(self, function_name):
@@ -40,18 +47,23 @@ class TestMetricMethodDecorator:
         decorated = metric_method(test_func)
 
         assert function_name in METRICS_METHODS
-        assert METRICS_METHODS[function_name] is test_func
-        assert decorated is test_func
+        # Registry now stores MetricMethod objects, not raw functions
+        assert isinstance(METRICS_METHODS[function_name], MetricMethod)
+        assert isinstance(decorated, MetricMethod)
+        # The MetricMethod wraps the original function
+        assert METRICS_METHODS[function_name].func is test_func
 
     def test_decorator_returns_original_function(self):
-        """Test that decorator returns the original function unchanged."""
+        """Test that decorator returns a MetricMethod wrapper."""
 
         def original_function(_data):
             return "original"
 
         decorated_function = metric_method(original_function)
 
-        assert decorated_function is original_function
+        # Returns MetricMethod, not the original function
+        assert isinstance(decorated_function, MetricMethod)
+        assert decorated_function.func is original_function
 
     @pytest.mark.parametrize(
         ("input_data", "expected"),
@@ -72,16 +84,18 @@ class TestMetricMethodDecorator:
         assert result == expected
 
     def test_decorator_preserves_metadata(self):
-        """Test that decorator preserves function metadata."""
+        """Test that decorator preserves function metadata in the wrapper."""
 
         @metric_method
         def documented_function(data):
             """This function has documentation."""
             return data
 
-        expected_doc = "This function has documentation."
-        assert documented_function.__doc__ == expected_doc
-        assert documented_function.__name__ == "documented_function"
+        # MetricMethod wrapper should preserve the original function's metadata
+        assert isinstance(documented_function, MetricMethod)
+        assert documented_function.func.__doc__ == "This function has documentation."
+        assert documented_function.func.__name__ == "documented_function"
+        assert documented_function.name == "documented_function"
 
     def test_decorator_rejects_parameterless_function(self):
         """Test that decorator rejects functions with no parameters."""
@@ -111,8 +125,14 @@ class TestGetMethod:
     """Test the get_method function."""
 
     def setup_method(self):
-        """Clear registry before each test."""
+        """Save registry and clear before each test."""
+        self._saved_methods = METRICS_METHODS.copy()
         clear_methods()
+
+    def teardown_method(self):
+        """Restore registry after each test."""
+        METRICS_METHODS.clear()
+        METRICS_METHODS.update(self._saved_methods)
 
     def test_get_method_returns_registered_function(self):
         """Test getting a registered method by name."""
@@ -149,8 +169,14 @@ class TestClearMethods:
     """Test the clear_methods function."""
 
     def setup_method(self):
-        """Clear registry before each test."""
+        """Save registry and clear before each test."""
+        self._saved_methods = METRICS_METHODS.copy()
         clear_methods()
+
+    def teardown_method(self):
+        """Restore registry after each test."""
+        METRICS_METHODS.clear()
+        METRICS_METHODS.update(self._saved_methods)
 
     def test_clear_removes_all_methods(self):
         """Test that clear removes all registered methods."""
@@ -168,8 +194,14 @@ class TestComplexFunctionSignatures:
     """Test decorator with various function signatures."""
 
     def setup_method(self):
-        """Clear registry before each test."""
+        """Save registry and clear before each test."""
+        self._saved_methods = METRICS_METHODS.copy()
         clear_methods()
+
+    def teardown_method(self):
+        """Restore registry after each test."""
+        METRICS_METHODS.clear()
+        METRICS_METHODS.update(self._saved_methods)
 
     def test_function_with_multiple_parameters(self):
         """Test decorator works with multiple parameter functions."""
@@ -394,3 +426,80 @@ class TestRegistryErrorConditions:
 
         with pytest.raises(RegistryLockError, match="clear"):
             registry.clear()
+
+
+class TestMetricMethodWithValueColumn:
+    """Test MetricMethod with value_column parameter."""
+
+    def setup_method(self):
+        """Save and clear registry before each test."""
+        self._saved_methods = METRICS_METHODS.copy()
+        clear_methods()
+
+    def teardown_method(self):
+        """Restore registry after each test."""
+        METRICS_METHODS.clear()
+        METRICS_METHODS.update(self._saved_methods)
+
+    def test_metric_method_decorator_with_value_column(self):
+        """Test using @metric_method with value_column parameter."""
+
+        @metric_method(value_column="count")
+        def count_by_category(data):
+            return data.groupby("category")["value"].sum().reset_index(name="count")
+
+        assert "count_by_category" in METRICS_METHODS
+        method = METRICS_METHODS["count_by_category"]
+        assert method.value_column == "count"
+
+    def test_metric_method_retrieval_by_name(self):
+        """Test retrieving a method by name using metric_method(name)."""
+
+        @metric_method
+        def test_method(data):
+            return len(data)
+
+        retrieved = metric_method("test_method")
+        assert retrieved is not None
+        assert retrieved.name == "test_method"
+
+    def test_metric_method_retrieval_all_methods(self):
+        """Test retrieving all methods using metric_method()."""
+
+        @metric_method
+        def method1(data):
+            return len(data)
+
+        @metric_method
+        def method2(data):
+            return sum(data)
+
+        all_methods = metric_method()
+        assert "method1" in all_methods
+        assert "method2" in all_methods
+
+    def test_metric_method_with_invalid_value_column_on_retrieval(self):
+        """Test that value_column cannot be specified when retrieving by name."""
+
+        @metric_method
+        def test_method(data):
+            return data
+
+        with pytest.raises(ValueError, match="Cannot specify value_column when retrieving"):
+            metric_method("test_method", value_column="count")  # type: ignore
+
+    def test_metric_method_invalid_argument_type(self):
+        """Test that invalid argument types raise ValueError."""
+        with pytest.raises(ValueError, match="Invalid argument type"):
+            metric_method(123)  # type: ignore
+
+    def test_metric_method_call_without_func(self):
+        """Test MetricMethod.__call__ when used as decorator factory."""
+        method_factory = MetricMethod(func=None, value_column="result")
+
+        def my_func(data):
+            return len(data)
+
+        # Should work as a decorator
+        wrapped = method_factory(my_func)
+        assert wrapped is not None

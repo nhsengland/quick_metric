@@ -2,12 +2,13 @@
 
 import pytest
 
-from quick_metric._core import interpret_metric_instructions
-from quick_metric._method_definitions import (
+from quick_metric.core import interpret_metric_instructions
+from quick_metric.registry import (
     _registry,
     list_method_names,
     metric_method,
 )
+from quick_metric.store import MetricsStore
 
 
 class TestCompleteWorkflow:
@@ -16,8 +17,8 @@ class TestCompleteWorkflow:
     def test_yaml_to_results_returns_expected_structure(self, basic_results):
         """Test that YAML workflow returns correct result structure."""
         expected_keys = {"cancer_analysis", "high_value_cases"}
-        assert isinstance(basic_results, dict)
-        assert set(basic_results.keys()) == expected_keys
+        assert isinstance(basic_results, MetricsStore)
+        assert set(basic_results.metrics()) == expected_keys
 
     @pytest.mark.parametrize(
         ("metric_name", "expected_methods"),
@@ -28,18 +29,17 @@ class TestCompleteWorkflow:
     )
     def test_yaml_to_results_metric_structure(self, basic_results, metric_name, expected_methods):
         """Test that each metric returns expected method results."""
-        assert isinstance(basic_results[metric_name], dict)
-        assert set(basic_results[metric_name].keys()) == expected_methods
+        assert set(basic_results.methods(metric_name)) == expected_methods
 
     def test_yaml_to_results_cancer_analysis_count(self, basic_results):
         """Test that cancer analysis returns correct count."""
         # 4 cancer cases (none have remove='Remove')
-        assert basic_results["cancer_analysis"]["count_records"] == 4
+        assert basic_results.value("cancer_analysis", "count_records") == 4
 
     def test_yaml_to_results_high_value_filtering(self, basic_results):
         """Test that high value filtering works correctly."""
         # Values > 200: [250, 300, 350, 400] = 4 records
-        assert basic_results["high_value_cases"]["count_records"] == 4
+        assert basic_results.value("high_value_cases", "count_records") == 4
 
     def test_custom_methods_end_to_end(self, healthcare_data):
         """Test end-to-end workflow with custom methods."""
@@ -71,7 +71,7 @@ class TestCompleteWorkflow:
             results = interpret_metric_instructions(healthcare_data, config)
 
             expected_methods = {"efficiency_score", "count_records"}
-            actual_keys = set(results["efficiency_analysis"].keys())
+            actual_keys = set(results.methods("efficiency_analysis"))
             assert actual_keys == expected_methods
         finally:
             # Clean up custom method
@@ -107,11 +107,11 @@ class TestCompleteWorkflow:
 
         results = interpret_metric_instructions(healthcare_data, config)
 
-        assert "complex_filter_metric" in results
-        metric_result = results["complex_filter_metric"]
-        assert "count_records" in metric_result
-        assert isinstance(metric_result["count_records"], int)
-        assert metric_result["count_records"] >= 0
+        assert isinstance(results, MetricsStore)
+        assert ("complex_filter_metric", "count_records") in results
+        count_value = results.value("complex_filter_metric", "count_records")
+        assert isinstance(count_value, int)
+        assert count_value >= 0
 
     def test_error_propagation_workflow(self, healthcare_data):
         """Test that errors are properly propagated through the workflow."""
@@ -136,7 +136,7 @@ class TestCompleteWorkflow:
 
         results = interpret_metric_instructions(empty_data, config)
 
-        assert results["empty_test"]["count_records"] == 0
+        assert results.value("empty_test", "count_records") == 0
 
     def test_multiple_metrics_workflow(self, healthcare_data):
         """Test workflow with multiple different metric types."""
@@ -163,7 +163,7 @@ class TestCompleteWorkflow:
         results = interpret_metric_instructions(healthcare_data, config)
 
         expected_keys = {"metric_1", "metric_2", "metric_3"}
-        assert set(results.keys()) == expected_keys
+        assert set(results.metrics()) == expected_keys
 
     @pytest.mark.parametrize(
         ("metric_name", "expected_methods"),
@@ -198,4 +198,4 @@ class TestCompleteWorkflow:
         }
 
         results = interpret_metric_instructions(healthcare_data, config)
-        assert set(results[metric_name].keys()) == expected_methods
+        assert set(results.methods(metric_name)) == expected_methods

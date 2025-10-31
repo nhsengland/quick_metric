@@ -7,7 +7,7 @@ message formatting, and attribute setting.
 
 import pytest
 
-from quick_metric._exceptions import (
+from quick_metric.exceptions import (
     DuplicateMethodWarning,
     EmptyRegistryError,
     InvalidMethodSignatureError,

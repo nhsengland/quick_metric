@@ -4,10 +4,11 @@ import pandas as pd
 import pytest
 
 from quick_metric._apply_methods import apply_method, apply_methods
-from quick_metric._exceptions import (
+from quick_metric.exceptions import (
     MetricsMethodNotFoundError,
     MetricSpecificationError,
 )
+from quick_metric.store import MetricsStore
 
 
 class TestApplyMethod:
@@ -129,12 +130,11 @@ class TestApplyMethod:
             apply_method(sample_data, method_spec, methods_dict)
 
     def test_apply_method_with_invalid_method_spec_type(self, sample_data):
-        """Test apply_method raises error for invalid method spec type."""
-        methods_dict = {"method1": lambda _: 1}
-        method_spec = 123  # Invalid type
+        """Test that apply_method rejects invalid method spec types."""
+        methods_dict = {}
 
-        with pytest.raises(MetricSpecificationError, match="must be str or dict"):
-            apply_method(sample_data, method_spec, methods_dict)
+        with pytest.raises(MetricSpecificationError):
+            apply_method(sample_data, 123, methods_dict)  # type: ignore
 
 
 class TestApplyMethods:
@@ -212,3 +212,104 @@ class TestApplyMethods:
         result = apply_methods(sample_data, ["count_records"])
 
         assert result == {"count_records": 3}
+
+
+class TestApplyMethodsWithStore:
+    """Test apply_methods function with MetricsStore integration."""
+
+    @pytest.fixture
+    def sample_data(self):
+        """Sample DataFrame for testing."""
+        return pd.DataFrame({"category": ["A", "B", "C"], "value": [10, 20, 30]})
+
+    def test_apply_methods_with_store_and_metric_name(self, sample_data):
+        """Test apply_methods adds results directly to store when provided."""
+        store = MetricsStore()
+
+        def sum_method(data):
+            return data["value"].sum()
+
+        methods_dict = {"sum_method": sum_method}
+
+        # Should return None when store is provided
+        result = apply_methods(
+            sample_data, ["sum_method"], methods_dict, store=store, metric_name="test_metric"
+        )
+
+        assert result is None
+
+        # Check result was added to store
+        stored_results = list(store.all())
+        assert len(stored_results) == 1
+        assert stored_results[0][0] == "test_metric"
+        assert stored_results[0][1] == "sum_method"
+
+    def test_apply_methods_with_store_requires_metric_name(self, sample_data):
+        """Test that metric_name is required when store is provided."""
+        store = MetricsStore()
+
+        with pytest.raises(ValueError, match="metric_name must be provided when store is provided"):
+            apply_methods(sample_data, ["count_records"], store=store, metric_name=None)
+
+    def test_apply_methods_with_store_and_dict_method_spec(self, sample_data):
+        """Test apply_methods with store using dict method specs with params."""
+        store = MetricsStore()
+
+        def filter_method(data, threshold=15):
+            return len(data[data["value"] > threshold])
+
+        methods_dict = {"filter_method": filter_method}
+        method_specs = [{"filter_method": {"threshold": 25}}]
+
+        apply_methods(
+            sample_data,
+            method_specs,  # type: ignore
+            methods_dict,
+            store=store,
+            metric_name="filtered_metric",
+        )
+
+        # Check result was added with parameterized key
+        stored_results = list(store.all())
+        assert len(stored_results) == 1
+        assert stored_results[0][0] == "filtered_metric"
+        # Method name should include parameter info
+        assert "filter_method" in stored_results[0][1]
+
+    def test_apply_methods_with_store_and_long_params(self, sample_data):
+        """Test apply_methods with store using long parameter strings (hash fallback)."""
+        store = MetricsStore()
+
+        def complex_method(data, param1="a" * 30, param2="b" * 30):  # noqa: ARG001
+            return len(data)
+
+        methods_dict = {"complex_method": complex_method}
+        method_specs = [{"complex_method": {"param1": "x" * 30, "param2": "y" * 30}}]
+
+        apply_methods(
+            sample_data,
+            method_specs,  # type: ignore
+            methods_dict,
+            store=store,
+            metric_name="complex_metric",
+        )
+
+        # Should use hash for long param string
+        stored_results = list(store.all())
+        assert len(stored_results) == 1
+        assert stored_results[0][0] == "complex_metric"
+        # Method name should include hash
+        assert "complex_method" in stored_results[0][1]
+
+    def test_apply_methods_with_store_invalid_method_spec(self, sample_data):
+        """Test apply_methods with store handles invalid method specs."""
+        store = MetricsStore()
+
+        with pytest.raises(MetricSpecificationError, match="must be str or dict"):
+            apply_methods(
+                sample_data,
+                [123],  # type: ignore
+                {},
+                store=store,
+                metric_name="test_metric",
+            )

@@ -62,9 +62,7 @@ from loguru import logger
 import pandas as pd
 
 
-def evaluate_condition(  # noqa: PLR0911
-    data_df: pd.DataFrame, column: str, value: Union[dict, Any]
-) -> pd.Series:
+def evaluate_condition(data_df: pd.DataFrame, column: str, value: Union[dict, Any]) -> pd.Series:
     """
     Evaluate a condition based on the provided column and value.
 
@@ -96,22 +94,20 @@ def evaluate_condition(  # noqa: PLR0911
     - not in
     """
     if isinstance(value, dict):
-        if "not" in value:
-            return ~evaluate_condition(data_df, column, value["not"])
-        if "less than" in value:
-            return data_df[column] < value["less than"]
-        if "less than equal" in value:
-            return data_df[column] <= value["less than equal"]
-        if "greater than" in value:
-            return data_df[column] > value["greater than"]
-        if "greater than equal" in value:
-            return data_df[column] >= value["greater than equal"]
-        if "is" in value:
-            return data_df[column] == value["is"]
-        if "in" in value:
-            return data_df[column].isin(value["in"])
-        if "not in" in value:
-            return ~data_df[column].isin(value["not in"])
+        eval_dict = {
+            "not": lambda _, y: ~evaluate_condition(data_df, column, y),
+            "less than": lambda x, y: x < y,
+            "less than equal": lambda x, y: x <= y,
+            "greater than": lambda x, y: x > y,
+            "greater than equal": lambda x, y: x >= y,
+            "is": lambda x, y: x == y,
+            "in": lambda x, y: x.isin(y),
+            "not in": lambda x, y: ~x.isin(y),
+        }
+        # Check if any key in the value dict matches an operator
+        for operator, operator_value in value.items():
+            if operator in eval_dict:
+                return eval_dict[operator](data_df[column], operator_value)
     if column in data_df.columns:
         if isinstance(value, list):
             return data_df[column].isin(value)

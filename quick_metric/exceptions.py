@@ -13,12 +13,15 @@ MethodNotFoundError : Raised when method lookup fails
 RegistryLockError : Raised when registry operations fail due to locking
 EmptyRegistryError : Raised when operations require non-empty registry
 MetricSpecificationError : Raised for invalid metric specifications
+MetricSpecificationWarning : Warning for potentially problematic metric specifications
+InvalidResultFormatError : Raised when method returns dict with invalid format
+ValueColumnConflictWarning : Warning when value_column specified in both dict and parameter
 """
 
 import difflib
 from typing import Optional
 
-from nhs_herbot import LoggedException
+from nhs_herbot import LoggedException, LoggedWarning
 
 
 class MetricMethodError(LoggedException):
@@ -131,6 +134,21 @@ class DuplicateMethodWarning(LoggedException):
         super().__init__(message)
 
 
+class MetricSpecificationWarning(LoggedWarning):
+    """Warning raised for potentially problematic metric specifications."""
+
+    def __init__(self, metric_name: str, issue: str, suggestion: Optional[str] = None):
+        self.metric_name = metric_name
+        self.issue = issue
+        self.suggestion = suggestion
+
+        message = f"Metric '{metric_name}': {issue}"
+        if suggestion:
+            message += f". {suggestion}"
+
+        super().__init__(message)
+
+
 class RegistryLockError(MetricMethodError):
     """Exception raised when registry operations fail due to threading."""
 
@@ -190,5 +208,43 @@ class MetricsMethodNotFoundError(MetricMethodError):
             if close_matches:
                 suggestions = ", ".join(close_matches)
                 message += f". Did you mean one of: {suggestions}?"
+
+        super().__init__(message)
+
+
+class InvalidResultFormatError(MetricSpecificationError):
+    """Exception raised when method returns dict with invalid format."""
+
+    def __init__(self, metric: str, method: str, returned_keys: list[str]):
+        self.metric = metric
+        self.method = method
+        self.returned_keys = returned_keys
+
+        message = (
+            f"Method '{method}' for metric '{metric}': "
+            f"returned dict without 'data' or 'value' keys (got keys: {returned_keys}). "
+            f"Please return either:"
+            f"\n  - Direct data (scalar, Series, DataFrame)"
+            f"\n  - {{'data': your_data, 'value_column': 'col_name'}} for DataFrames"
+            f"\n  - {{'value': your_scalar}} for scalar values"
+        )
+
+        super().__init__(message, method_spec={"keys": returned_keys})
+
+
+class ValueColumnConflictWarning(LoggedWarning):
+    """Warning raised when value_column is specified in both dict and parameter."""
+
+    def __init__(self, metric: str, method: str, dict_value: str, param_value: str):
+        self.metric = metric
+        self.method = method
+        self.dict_value = dict_value
+        self.param_value = param_value
+
+        message = (
+            f"Method '{method}' for metric '{metric}': "
+            f"value_column specified in both dict ('{dict_value}') "
+            f"and parameter ('{param_value}'). Using dict value."
+        )
 
         super().__init__(message)

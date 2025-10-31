@@ -45,7 +45,7 @@ from oops_its_a_pipeline import PipelineStage
 from oops_its_a_pipeline.exceptions import PipelineStageValidationError
 import pandas as pd
 
-from quick_metric._core import generate_metrics
+from quick_metric.core import generate_metrics
 
 
 class GenerateMetricsStage(PipelineStage):
@@ -162,7 +162,7 @@ class GenerateMetricsStage(PipelineStage):
     See Also
     --------
     create_metrics_stage : Convenience factory function
-    quick_metric._core.generate_metrics : Underlying metrics function
+    quick_metric.core.generate_metrics : Underlying metrics function
     oops_its_a_pipeline.PipelineStage : Base class
     """
 
@@ -401,9 +401,9 @@ def create_metrics_stage(
     See Also
     --------
     GenerateMetricsStage : The underlying stage class
-    quick_metric._core.generate_metrics : Core metrics generation function
+    quick_metric.core.generate_metrics : Core metrics generation function
     oops_its_a_pipeline.Pipeline : Pipeline construction
-    quick_metric._method_definitions.metric_method : Method registration
+    quick_metric.registry.metric_method : Method registration
     """
     return GenerateMetricsStage(
         data_input=data_input,

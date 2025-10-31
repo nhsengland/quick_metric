@@ -1,6 +1,9 @@
 # Data
 /data/
 
+# Test data cache
+tests/e2e/.test_data_cache/
+
 # Mac OS-specific storage files
 .DS_Store
 
@@ -189,3 +192,5 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+tmp/

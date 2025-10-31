@@ -4,11 +4,28 @@ import pandas as pd
 import pytest
 import yaml
 
-from quick_metric._core import (
+from quick_metric.core import (
     interpret_metric_instructions,
     read_metric_instructions,
 )
-from quick_metric._method_definitions import metric_method
+from quick_metric.registry import METRICS_METHODS, metric_method
+
+
+@pytest.fixture(autouse=True)
+def preserve_test_methods():
+    """Preserve and restore test methods around each test.
+
+    This ensures that test methods registered in conftest are available
+    even if individual tests call clear_methods().
+    """
+    # Save current state before test
+    saved_methods = METRICS_METHODS.copy()
+
+    yield
+
+    # Restore saved methods after test
+    METRICS_METHODS.clear()
+    METRICS_METHODS.update(saved_methods)
 
 
 # Test helper methods - only registered when running tests
@@ -30,7 +47,8 @@ def mean_value(data: pd.DataFrame, column: str = "value") -> float:
 def sum_values(data: pd.DataFrame, column: str = "value") -> float:
     """Calculate the sum of a specified column."""
     if column in data.columns:
-        return data[column].sum()
+        # Use Python's sum() to avoid numpy/pandas compatibility issues
+        return float(sum(data[column]))
     return 0.0
 
 
