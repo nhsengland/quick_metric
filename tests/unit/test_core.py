@@ -8,8 +8,8 @@ import pytest
 import yaml
 
 from quick_metric import MetricsStore, generate_metrics
+from quick_metric._config import normalize_method_specs
 from quick_metric.core import (
-    _normalize_method_specs,
     interpret_metric_instructions,
     read_metric_instructions,
 )
@@ -276,39 +276,39 @@ class TestInterpretMetricInstructions:
 
 
 class TestNormalizeMethodSpecs:
-    """Test cases for the _normalize_method_specs function."""
+    """Test cases for the normalize_method_specs function."""
 
     def test_normalize_method_specs_with_invalid_list_item(self):
-        """Test _normalize_method_specs with invalid item in list."""
+        """Test normalize_method_specs with invalid item in list."""
         # List with invalid item type
         invalid_method_input = ["valid_method", 123]  # 123 is invalid
 
         with pytest.raises(MetricSpecificationError, match="Method list items must be str or dict"):
-            _normalize_method_specs(invalid_method_input)
+            normalize_method_specs(invalid_method_input)
 
     def test_normalize_method_specs_with_invalid_type(self):
-        """Test _normalize_method_specs with completely invalid type."""
+        """Test normalize_method_specs with completely invalid type."""
         # Invalid type (not str, list, or dict)
         invalid_method_input = 123
 
         with pytest.raises(
             MetricSpecificationError, match="Method specification must be str, list, or dict"
         ):
-            _normalize_method_specs(invalid_method_input)
+            normalize_method_specs(invalid_method_input)
 
     def test_normalize_method_specs_with_valid_string(self):
-        """Test _normalize_method_specs with valid string."""
-        result = _normalize_method_specs("test_method")
+        """Test normalize_method_specs with valid string."""
+        result = normalize_method_specs("test_method")
         assert result == ["test_method"]
 
     def test_normalize_method_specs_with_valid_list(self):
-        """Test _normalize_method_specs with valid list."""
+        """Test normalize_method_specs with valid list."""
         method_input = ["method1", {"method2": {"param": "value"}}]
-        result = _normalize_method_specs(method_input)
+        result = normalize_method_specs(method_input)
         assert result == ["method1", {"method2": {"param": "value"}}]
 
     def test_normalize_method_specs_with_valid_dict(self):
-        """Test _normalize_method_specs with valid dict."""
+        """Test normalize_method_specs with valid dict."""
         method_input = {"test_method": {"param": "value"}}
-        result = _normalize_method_specs(method_input)
+        result = normalize_method_specs(method_input)
         assert result == [{"test_method": {"param": "value"}}]
