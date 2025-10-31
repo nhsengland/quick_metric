@@ -21,6 +21,14 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
     
+    - name: Cache test data
+      uses: actions/cache@v4
+      with:
+        path: tests/e2e/.test_data_cache
+        key: test-data-${{ hashFiles('tests/e2e/test_split_performance.py', 'tests/e2e/test_metrics_store_performance.py') }}
+        restore-keys: |
+          test-data-
+    
     - name: Install tox
       run: |
         python -m pip install --upgrade pip
