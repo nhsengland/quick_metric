@@ -22,10 +22,12 @@ Constants
 METRICS_METHODS : Global registry instance
 """
 
+from functools import wraps
 import inspect
 import threading
 from typing import Any, Callable, overload
 
+import dask.dataframe as dd
 from loguru import logger
 
 from quick_metric.exceptions import (
@@ -35,6 +37,42 @@ from quick_metric.exceptions import (
     RegistryLockError,
 )
 from quick_metric.results import MetricResult, create_result
+
+
+def auto_compute_dask(func: Callable) -> Callable:
+    """
+    Decorator that automatically converts Dask DataFrames to pandas before calling the function.
+
+    This allows metric methods to be written for pandas without worrying about Dask.
+    The Dask DataFrame is computed (materialized) before being passed to the function.
+
+    Parameters
+    ----------
+    func : Callable
+        The metric method function
+
+    Returns
+    -------
+    Callable
+        Wrapped function that handles Dask DataFrames
+
+    Examples
+    --------
+    >>> @auto_compute_dask
+    >>> def count_rows(data):
+    ...     return len(data)  # Works with pandas, automatically handles Dask
+    """
+
+    @wraps(func)
+    def wrapper(data, *args, **kwargs):
+        # Check if it's a Dask DataFrame and compute it
+        if isinstance(data, dd.DataFrame):
+            logger.trace(f"Auto-computing Dask DataFrame for {func.__name__}")
+            data = data.compute()
+
+        return func(data, *args, **kwargs)
+
+    return wrapper
 
 
 class MetricMethod:
@@ -140,7 +178,9 @@ class MetricRegistry:
         self._methods: dict[str, MetricMethod] = {}
         self._lock = threading.RLock()
 
-    def register(self, func: Callable, value_column: str | None = None) -> MetricMethod:
+    def register(
+        self, func: Callable, value_column: str | None = None, auto_compute: bool = True
+    ) -> MetricMethod:
         """
         Register a user function as a metric method.
 
@@ -150,6 +190,10 @@ class MetricRegistry:
             User function to register. Must accept at least one parameter.
         value_column : str, optional
             For DataFrame results, which column contains the metric values.
+        auto_compute : bool, default True
+            If True, automatically compute Dask DataFrames to pandas before
+            calling the function. This allows pandas-only methods to work
+            seamlessly with Dask.
 
         Returns
         -------
@@ -171,8 +215,11 @@ class MetricRegistry:
                 "Function must accept at least one parameter (the data)",
             )
 
+        # Wrap with auto_compute if requested
+        wrapped_func = auto_compute_dask(func) if auto_compute else func
+
         # Create MetricMethod wrapper
-        metric_method_obj = MetricMethod(func, value_column=value_column)
+        metric_method_obj = MetricMethod(wrapped_func, value_column=value_column)
 
         # Register the method
         with self._lock:
