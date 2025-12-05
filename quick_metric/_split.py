@@ -5,18 +5,68 @@ Handles splitting data by specified columns before metric calculation,
 promoting results to higher dimensions (Scalar → Series → DataFrame).
 """
 
+import hashlib
 from typing import Optional, Union
 
+from dask.base import tokenize as dask_tokenize
+import dask.dataframe as dd
 from loguru import logger
 import pandas as pd
 
-from quick_metric._apply_methods import apply_methods
-from quick_metric.exceptions import MetricSpecificationError
-from quick_metric.results import DataFrameResult, ScalarResult, SeriesResult
+from quick_metric.exceptions import MetricsMethodNotFoundError, MetricSpecificationError
+from quick_metric.results import DataFrameResult, SeriesResult
 from quick_metric.store import MetricsStore
 
 
-def normalize_split_by(split_by) -> Optional[list[str]]:
+class _MethodApplier:
+    """Callable wrapper for applying methods in groupby operations.
+
+    This class is serializable by Dask and provides deterministic hashing.
+    """
+
+    def __init__(self, method: callable, params: Optional[dict] = None):
+        """Initialize the method applier.
+
+        Parameters
+        ----------
+        method : callable
+            The metric method to apply
+        params : dict, optional
+            Parameters to pass to the method
+        """
+        self.method = method
+        self.params = params or {}
+        # Store method name for deterministic hashing
+        self.method_name = getattr(method, "__name__", repr(method))
+
+    def __call__(self, df):
+        """Apply the method to the DataFrame."""
+        if self.params:
+            return self.method(df, **self.params)
+        return self.method(df)
+
+    def __reduce__(self):
+        """Support pickling for Dask serialization."""
+        return (_MethodApplier, (self.method, self.params))
+
+    def __hash__(self):
+        """Provide deterministic hashing."""
+        param_str = str(sorted(self.params.items())) if self.params else ""
+        return hash((self.method_name, param_str))
+
+    def __eq__(self, other):
+        """Support equality comparison."""
+        if not isinstance(other, _MethodApplier):
+            return False
+        return self.method_name == other.method_name and self.params == other.params
+
+    def __dask_tokenize__(self):
+        """Provide deterministic tokenization for Dask."""
+        param_str = str(sorted(self.params.items())) if self.params else ""
+        return dask_tokenize(self.method_name, param_str)
+
+
+def normalize_split_by(split_by: Union[str, list[str], None]) -> Optional[list[str]]:
     """
     Normalize split_by to a list of column names or None.
 
@@ -53,13 +103,13 @@ def normalize_split_by(split_by) -> Optional[list[str]]:
     )
 
 
-def validate_split_columns(data: pd.DataFrame, split_by: list[str], metric_name: str) -> None:
+def validate_split_columns(data: dd.DataFrame, split_by: list[str], metric_name: str) -> None:
     """
     Validate that split_by columns exist in the data.
 
     Parameters
     ----------
-    data : pd.DataFrame
+    data : dd.DataFrame
         DataFrame to validate against
     split_by : list[str]
         Column names to validate
@@ -80,7 +130,7 @@ def validate_split_columns(data: pd.DataFrame, split_by: list[str], metric_name:
 
 
 def process_with_split(
-    data: pd.DataFrame,
+    data: dd.DataFrame,
     split_by: list[str],
     method_specs: list[Union[str, dict]],
     metrics_methods: dict,
@@ -88,17 +138,15 @@ def process_with_split(
     metric_name: str,
 ) -> None:
     """
-    Process metrics with data split by specified columns.
+    Process metrics with data split by specified columns using Dask.
 
-    Uses pandas groupby for efficiency. Each unique combination of split_by
-    values becomes additional dimensions in the result:
-    - ScalarResult → SeriesResult (single split) or DataFrameResult (multiple splits)
-    - SeriesResult → DataFrameResult (splits become additional index levels/columns)
-    - DataFrameResult → DataFrameResult (splits added as columns)
+    Uses Dask's groupby.apply() to process groups in parallel without
+    materializing all groups at once. Each unique combination of split_by
+    values becomes additional dimensions in the result.
 
     Parameters
     ----------
-    data : pd.DataFrame
+    data : dd.DataFrame
         Filtered data to split and process
     split_by : list[str]
         Column names to split by (in order)
@@ -119,165 +167,80 @@ def process_with_split(
     # Validate split columns exist
     validate_split_columns(data, split_by, metric_name)
 
-    # Check if any split columns have all NaN - these won't create groups
-    null_splits = [col for col in split_by if data[col].isna().all()]
-    if null_splits:
-        logger.warning(f"Split columns contain only NaN values: {null_splits}")
+    logger.debug(f"Processing with split_by: {split_by}")
 
-    # Use groupby for efficient splitting
-    grouped = data.groupby(split_by, dropna=False, sort=True)
-    n_groups = grouped.ngroups
+    # For each method, apply it using groupby.apply() which stays lazy
+    results_by_method = {}
 
-    logger.debug(f"Created {n_groups} groups from {len(split_by)} split columns")
-
-    # Collect results indexed by split values
-    results_by_method = {}  # {method_name: [(split_key, result), ...]}
-
-    for split_key, group_data in grouped:
-        # split_key is a tuple for multiple splits, scalar for single split
-        key_normalized = split_key if isinstance(split_key, tuple) else [split_key]
-        split_dict = dict(zip(split_by, key_normalized))
-        logger.trace(f"Processing split: {split_dict} ({len(group_data)} rows)")
-
-        # Create temporary store for this group
-        temp_store = MetricsStore()
-
-        apply_methods(
-            data=group_data,
-            method_specs=method_specs,
-            metrics_methods=metrics_methods,
-            store=temp_store,
-            metric_name=metric_name,
-        )
-
-        # Extract and store results
-        for method_name in temp_store.methods(metric_name):
-            result = temp_store[metric_name, method_name]
-
-            if method_name not in results_by_method:
-                results_by_method[method_name] = []
-
-            results_by_method[method_name].append((split_key, result))
-
-    # Combine results for each method
-    for method_name, split_results in results_by_method.items():
-        combined_result = combine_split_results(
-            split_results=split_results,
-            split_by=split_by,
-            metric_name=metric_name,
-            method_name=method_name,
-        )
-
-        store.add(combined_result)
-
-
-def combine_split_results(
-    split_results: list[tuple],
-    split_by: list[str],
-    metric_name: str,
-    method_name: str,
-) -> Union[ScalarResult, SeriesResult, DataFrameResult]:
-    """
-    Combine split results into a higher-dimensional result.
-
-    Transformations:
-    - ScalarResult + 1 split → SeriesResult (index = split_by)
-    - ScalarResult + N splits → DataFrameResult (multi-index = split_by)
-    - SeriesResult + splits → DataFrameResult (add split_by to index/columns)
-    - DataFrameResult + splits → DataFrameResult (add split_by as columns)
-
-    Parameters
-    ----------
-    split_results : list[tuple]
-        List of (split_key, result) tuples from groupby
-    split_by : list[str]
-        Names of the split columns
-    metric_name : str
-        Name of the metric
-    method_name : str
-        Name of the method
-
-    Returns
-    -------
-    MetricResult
-        Combined result with split_by as additional dimensions
-    """
-    # Determine result type from first result
-    _, first_result = split_results[0]
-
-    if isinstance(first_result, ScalarResult):
-        # Scalar → Series or DataFrame
-        values = {}
-        for split_key, result in split_results:
-            # Normalize split_key to tuple
-            key_tuple = split_key if isinstance(split_key, tuple) else (split_key,)
-            values[key_tuple] = result.data
-
-        if len(split_by) == 1:
-            # Single split → Series
-            series = pd.Series({k[0]: v for k, v in values.items()})
-            series.index.name = split_by[0]
-            return SeriesResult(metric=metric_name, method=method_name, data=series)
-
-        # Multiple splits → DataFrame with MultiIndex
-        index = pd.MultiIndex.from_tuples(values.keys(), names=split_by)
-        series = pd.Series(list(values.values()), index=index, name="value")
-        df = series.to_frame()
-        return DataFrameResult(
-            metric=metric_name, method=method_name, data=df, value_column="value"
-        )
-
-    if isinstance(first_result, SeriesResult):
-        # Series → DataFrame
-        # Each split becomes an additional index level or column
-        dfs = []
-        for split_key, result in split_results:
-            df = result.data.to_frame(name="value")
-
-            # Add split columns
-            key_tuple = split_key if isinstance(split_key, tuple) else (split_key,)
-            for col, val in zip(split_by, key_tuple):
-                df[col] = val
-
-            dfs.append(df)
-
-        combined_df = pd.concat(dfs, ignore_index=False)
-
-        # Create hierarchical index: split_by + original index
-        if combined_df.index.name:
-            index_cols = split_by + [combined_df.index.name]
+    for method_spec in method_specs:
+        # Parse method spec
+        if isinstance(method_spec, str):
+            method_name = method_spec
+            method_params = {}
+        elif isinstance(method_spec, dict):
+            method_name, method_params = next(iter(method_spec.items()))
         else:
-            index_cols = split_by + ["index"]
+            raise MetricSpecificationError(
+                f"Method specification must be str or dict, got: {type(method_spec)}",
+                method_spec,
+            )
 
-        combined_df = combined_df.reset_index()
-        combined_df = combined_df.set_index(index_cols)
+        try:
+            method = metrics_methods[method_name]
+        except KeyError as e:
+            raise MetricsMethodNotFoundError(method_name, list(metrics_methods.keys())) from e
 
-        return DataFrameResult(
-            metric=metric_name, method=method_name, data=combined_df, value_column="value"
-        )
+        logger.trace(f"Applying method '{method_name}' to grouped data")
 
-    if isinstance(first_result, DataFrameResult):
-        # DataFrame → DataFrame with additional split columns
-        dfs = []
-        for split_key, result in split_results:
-            df = result.data.copy()
+        # Use Dask's groupby.apply() which processes groups in parallel
+        # The method is applied to each partition of each group
+        grouped = data.groupby(split_by, dropna=False, sort=True)
 
-            # Add split columns
-            key_tuple = split_key if isinstance(split_key, tuple) else (split_key,)
-            for col, val in zip(split_by, key_tuple):
-                df[col] = val
+        # Create a serializable applier (Dask requires deterministic hashing)
+        applier = _MethodApplier(method, method_params)
 
-            dfs.append(df)
+        # Apply the method to each group - this stays lazy!
+        result_series = grouped.apply(applier, meta=(None, "object"))
 
-        combined_df = pd.concat(dfs, ignore_index=True)
+        # Compute the results - this is where Dask parallelizes
+        computed_result = result_series.compute()
 
-        return DataFrameResult(
-            metric=metric_name,
-            method=method_name,
-            data=combined_df,
-            value_column=first_result.value_column,
-        )
+        # Store with method name
+        result_key = method_name
+        if method_params:
+            param_repr = str(sorted(method_params.items()))
+            if len(param_repr) > 50:
+                param_hash = hashlib.md5(param_repr.encode()).hexdigest()[:8]
+                result_key = f"{method_name}_{param_hash}"
+            else:
+                param_str = "_".join(f"{k}{v}" for k, v in sorted(method_params.items()))
+                result_key = f"{method_name}_{param_str}"
 
-    raise MetricSpecificationError(
-        f"Unknown result type: {type(first_result)}", method_spec=split_results
-    )
+        results_by_method[result_key] = computed_result
+
+    # Now convert the computed results to the appropriate MetricResult types
+    for method_name, result_data in results_by_method.items():
+        # The result_data is now a pandas Series with MultiIndex (or single index)
+        # We need to convert this to the appropriate result type
+
+        if isinstance(result_data.index, pd.MultiIndex):
+            # Multiple splits - create DataFrame
+            if len(split_by) == 1:
+                # Single split but MultiIndex? Should not happen, but handle it
+                series = pd.Series(result_data.values, index=result_data.index.get_level_values(0))
+                series.index.name = split_by[0]
+                result_obj = SeriesResult(metric=metric_name, method=method_name, data=series)
+            else:
+                # Multiple splits - convert to DataFrame
+                df = result_data.reset_index()
+                df.columns = list(split_by) + ["value"]
+                result_obj = DataFrameResult(
+                    metric=metric_name, method=method_name, data=df, value_column="value"
+                )
+        else:
+            # Single split - create Series
+            series = pd.Series(result_data.values, index=result_data.index)
+            series.index.name = split_by[0] if len(split_by) == 1 else None
+            result_obj = SeriesResult(metric=metric_name, method=method_name, data=series)
+
+        store.add(result_obj)
