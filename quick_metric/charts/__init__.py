@@ -1,150 +1,98 @@
 """
-Charts module for NHS-branded visualizations.
+NHS-branded chart generation for quick_metric.
 
-Provides infrastructure for generating publication-quality charts
-from MetricsStore results with NHS branding and styling.
+This module provides base chart types and rendering functions that can be
+extended by consuming pipelines for domain-specific visualizations.
 
-Main Components
----------------
-core : Chart configuration, registry, and target line functionality
-definitions : Base chart class and common chart type definitions
-seaborn_renderer : NHS-branded Seaborn/matplotlib chart rendering
-excel_renderer : Excel chart embedding with xlsxwriter
+Quick Start
+-----------
+```python
+from quick_metric.charts import create_chart, ChartSettings, Target
 
-Configuration
--------------
-Charts can be configured via YAML:
+# Simple chart from DataFrame
+fig = create_chart(
+    df=result_df,
+    method_name="compliance_rate",
+    chart_type="line",
+)
 
-.. code-block:: yaml
+# With settings
+settings = ChartSettings(
+    target=Target(value=0.95, label="95% Target"),
+    y_label="Compliance Rate (%)",
+)
+fig = create_chart(df, "compliance_rate", settings=settings)
+```
 
-    chart_config:
-      defaults:
-        enabled: true
-        include_table: false
-        figsize: [10, 6]
-        dpi: 150
+Extending for Domain-Specific Charts
+------------------------------------
+```python
+from quick_metric.charts import LineChart, Target
 
-      targets:
-        monthly_compliance_rates:
-          value: 0.95
-          label: "95% Target"
-          color: green
+class ComplianceRateChart(LineChart):
+    '''Line chart for compliance rate methods.'''
 
-      methods:
-        monthly_compliance_rates:
-          enabled: true
-          chart_type: line
-          include_table: true
+    y_label = "Compliance Rate (%)"
+    default_target = Target(value=0.95, label="95% Target")
 
-Examples
---------
-Create a chart for a single method:
+    def matches(self, method_name: str) -> bool:
+        return "compliance_rate" in method_name.lower()
+```
 
->>> from quick_metric.charts import create_seaborn_chart
->>> fig = create_seaborn_chart(
-...     df=data,
-...     method_name="compliance_rate",
-...     metric_name="monthly_metrics",
-...     output_path="chart.png"
-... )
+Integration with MetricsStore
+-----------------------------
+```python
+from quick_metric.charts import charts_from_store
 
-Create charts for all methods in a store:
-
->>> from quick_metric.charts import create_all_charts_for_metrics
->>> charts = create_all_charts_for_metrics(
-...     metrics_store=store,
-...     output_dir="charts/",
-...     include_table=True
-... )
-
-Register a custom chart type:
-
->>> from quick_metric.charts import BaseChart, register_chart
->>>
->>> @register_chart(enabled=True)
-... class CustomChart(BaseChart):
-...     chart_type = "line"
-...     display_name = "Custom Chart"
-...
-...     def matches(self, method_name: str) -> bool:
-...         return "custom" in method_name.lower()
+# Generate all charts from a store
+charts = charts_from_store(
+    store,
+    chart_classes=[ComplianceRateChart(), CountChart()],
+    output_dir="charts/",
+)
+```
 """
 
-# Core configuration and registry
 from quick_metric.charts.core import (
-    CHART_TARGETS,
-    ChartConfig,
-    ChartDefaults,
-    ChartTarget,
-    MethodChartConfig,
-    clear_chart_target,
-    get_chart_config,
-    get_chart_for_method,
-    get_method_chart_settings,
-    get_registered_charts,
-    get_target_for_method,
-    load_chart_config,
-    register_chart,
-    set_chart_config,
-    set_chart_target,
-    should_create_chart,
-    snake_to_title,
-)
-
-# Chart type definitions
-from quick_metric.charts.definitions import (
-    BacklogChart,
-    BaseChart,
-    ComplianceCountChart,
-    ComplianceRateChart,
-    MeanDaysChart,
-)
-
-# Excel renderer
-from quick_metric.charts.excel_renderer import calculate_chart_rows, create_excel_chart
-
-# Seaborn renderer
-from quick_metric.charts.seaborn_renderer import (
     NHS_COLOUR_CYCLE,
     NHS_COLOURS,
-    create_all_charts_for_metrics,
-    create_seaborn_chart,
+    ChartSettings,
+    Target,
+    get_color,
+    snake_to_title,
 )
+from quick_metric.charts.definitions import (
+    BarChart,
+    BaseChart,
+    ColumnChart,
+    LineChart,
+)
+from quick_metric.charts.excel_renderer import create_excel_chart
+from quick_metric.charts.seaborn_renderer import (
+    create_chart,
+    create_chart_from_chart_class,
+)
+from quick_metric.charts.store_integration import chart_result, charts_from_store
 
 __all__ = [
-    # Core - Configuration
-    "ChartConfig",
-    "ChartDefaults",
-    "ChartTarget",
-    "MethodChartConfig",
-    "load_chart_config",
-    "get_chart_config",
-    "set_chart_config",
-    # Core - Registry
-    "register_chart",
-    "get_registered_charts",
-    "get_chart_for_method",
-    "should_create_chart",
-    "get_method_chart_settings",
-    # Core - Targets
-    "CHART_TARGETS",
-    "get_target_for_method",
-    "set_chart_target",
-    "clear_chart_target",
-    # Core - Utilities
-    "snake_to_title",
-    # Definitions
-    "BaseChart",
-    "ComplianceRateChart",
-    "ComplianceCountChart",
-    "MeanDaysChart",
-    "BacklogChart",
-    # Seaborn renderer
+    # Core settings
+    "ChartSettings",
+    "Target",
     "NHS_COLOURS",
     "NHS_COLOUR_CYCLE",
-    "create_seaborn_chart",
-    "create_all_charts_for_metrics",
-    # Excel renderer
+    # Base chart types
+    "BaseChart",
+    "LineChart",
+    "ColumnChart",
+    "BarChart",
+    # Rendering
+    "create_chart",
+    "create_chart_from_chart_class",
     "create_excel_chart",
-    "calculate_chart_rows",
+    # Store integration
+    "charts_from_store",
+    "chart_result",
+    # Utilities
+    "snake_to_title",
+    "get_color",
 ]

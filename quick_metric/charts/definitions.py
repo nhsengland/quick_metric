@@ -1,38 +1,59 @@
 """
-Base chart class and common chart type definitions.
+Base chart type definitions.
 
-Provides the abstract base class for chart types and common
-NHS-themed chart definitions for compliance metrics.
+Provides abstract base classes for chart types that can be extended
+by consuming pipelines for domain-specific charts.
+
+Example Usage in Consuming Pipeline
+-----------------------------------
+```python
+from quick_metric.charts import LineChart, ColumnChart, Target
+
+class ComplianceRateChart(LineChart):
+    '''Line chart for compliance rate methods.'''
+
+    y_label = "Compliance Rate (%)"
+    default_target = Target(value=0.95, label="95% Target")
+
+    def matches(self, method_name: str) -> bool:
+        return "compliance_rate" in method_name.lower()
+```
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
-from quick_metric.charts.core import register_chart, snake_to_title
+from quick_metric.charts.core import ChartSettings, Target, snake_to_title
+
+if TYPE_CHECKING:
+    pass
 
 
 class BaseChart(ABC):
     """Abstract base class for chart types.
 
-    Chart types define how to match methods and generate chart metadata.
-    They don't render charts directly - that's handled by renderers.
+    Subclass this to create domain-specific chart types in your pipeline.
+    The chart type determines rendering style and default settings.
 
     Attributes
     ----------
     chart_type : str
-        Type of chart (e.g., 'line', 'column', 'bar')
-    display_name : str
-        Human-readable name for the chart type
+        Rendering type: 'line', 'column', or 'bar'
+    y_label : str
+        Default Y-axis label
+    default_target : Target | None
+        Default target line (can be overridden per-call)
     """
 
     chart_type: str = "line"
-    display_name: str = "Chart"
-    _enabled: bool = True
+    y_label: str = "Value"
+    default_target: Target | None = None
 
     @abstractmethod
     def matches(self, method_name: str) -> bool:
-        """Check if this chart type matches a method name.
+        """Check if this chart type should be used for a method.
 
         Parameters
         ----------
@@ -42,160 +63,94 @@ class BaseChart(ABC):
         Returns
         -------
         bool
-            True if this chart type should be used for the method
+            True if this chart type matches the method
         """
 
-    def get_title(self, method_name: str) -> str:
-        """Generate chart title from method name.
+    def get_title(self, method_name: str, metric_name: str | None = None) -> str:
+        """Generate chart title from method and metric names.
 
         Parameters
         ----------
         method_name : str
             Name of the metric method
+        metric_name : str | None
+            Name of the parent metric
 
         Returns
         -------
         str
             Chart title
         """
-        return snake_to_title(method_name)
+        title = snake_to_title(method_name)
+        if metric_name:
+            title = f"{snake_to_title(metric_name)}: {title}"
+        return title
 
-    def get_y_axis_name(self, method_name: str) -> str:
-        """Get Y-axis label for the chart.
-
-        Parameters
-        ----------
-        method_name : str
-            Name of the metric method
-
-        Returns
-        -------
-        str
-            Y-axis label
-        """
-        if self.is_percentage(method_name):
-            return "Percentage (%)"
-        return "Value"
-
-    def get_x_axis_name(self) -> str:
-        """Get X-axis label for the chart.
-
-        Returns
-        -------
-        str
-            X-axis label
-        """
-        return "Period"
-
-    def is_percentage(self, method_name: str) -> bool:
-        """Check if the method produces percentage values.
+    def get_settings(self, **overrides: object) -> ChartSettings:
+        """Get chart settings with defaults and any overrides.
 
         Parameters
         ----------
-        method_name : str
-            Name of the metric method
+        **overrides
+            Settings to override defaults
 
         Returns
         -------
-        bool
-            True if values should be displayed as percentages
+        ChartSettings
+            Merged settings
         """
-        method_lower = method_name.lower()
-        return any(term in method_lower for term in ["rate", "percentage", "percent", "compliance"])
+        settings = ChartSettings(
+            y_label=self.y_label,
+            target=self.default_target,
+        )
+
+        # Apply overrides
+        for key, value in overrides.items():
+            if hasattr(settings, key) and value is not None:
+                setattr(settings, key, value)
+
+        return settings
 
 
-# =============================================================================
-# Common Chart Types
-# =============================================================================
+class LineChart(BaseChart):
+    """Base line chart type.
 
-
-@register_chart(enabled=True)
-class ComplianceRateChart(BaseChart):
-    """Line chart for compliance rates and percentages.
-
-    Matches methods containing 'rate', 'percentage', or 'compliance'.
-    Displays values as percentages with target lines.
+    Use for time series, trends, and continuous data.
     """
 
     chart_type = "line"
-    display_name = "Compliance Rate"
 
     def matches(self, method_name: str) -> bool:
-        """Match rate, percentage, or compliance methods."""
+        """Default: match rate/percentage methods."""
         method_lower = method_name.lower()
-        return any(term in method_lower for term in ["rate", "percentage", "compliance", "percent"])
-
-    def get_y_axis_name(self, method_name: str) -> str:
-        """Return percentage label."""
-        return "Compliance Rate (%)"
+        return any(term in method_lower for term in ["rate", "percentage", "percent", "trend"])
 
 
-@register_chart(enabled=True)
-class ComplianceCountChart(BaseChart):
-    """Column chart for counts and volumes.
+class ColumnChart(BaseChart):
+    """Base column (vertical bar) chart type.
 
-    Matches methods containing 'count' or 'volume'.
+    Use for counts, volumes, and categorical comparisons.
     """
 
     chart_type = "column"
-    display_name = "Compliance Count"
+    y_label = "Count"
 
     def matches(self, method_name: str) -> bool:
-        """Match count or volume methods."""
+        """Default: match count/volume methods."""
         method_lower = method_name.lower()
         return any(term in method_lower for term in ["count", "volume", "total"])
 
-    def get_y_axis_name(self, method_name: str) -> str:
-        """Return count label."""
-        return "Count"
 
-    def is_percentage(self, method_name: str) -> bool:
-        """Counts are never percentages."""
-        return False
+class BarChart(BaseChart):
+    """Base bar (horizontal) chart type.
 
-
-@register_chart(enabled=True)
-class MeanDaysChart(BaseChart):
-    """Line chart for mean days metrics.
-
-    Matches methods containing both 'mean' and 'days'.
+    Use for categorical comparisons where labels are long.
     """
 
-    chart_type = "line"
-    display_name = "Mean Days"
+    chart_type = "bar"
+    y_label = "Value"
 
     def matches(self, method_name: str) -> bool:
-        """Match methods with mean and days."""
+        """Default: match breakdown/by_ methods."""
         method_lower = method_name.lower()
-        return "mean" in method_lower and "days" in method_lower
-
-    def get_y_axis_name(self, method_name: str) -> str:
-        """Return days label."""
-        return "Mean Days"
-
-    def is_percentage(self, method_name: str) -> bool:
-        """Days are never percentages."""
-        return False
-
-
-@register_chart(enabled=True)
-class BacklogChart(BaseChart):
-    """Column chart for backlog metrics.
-
-    Matches methods containing 'backlog'.
-    """
-
-    chart_type = "column"
-    display_name = "Backlog"
-
-    def matches(self, method_name: str) -> bool:
-        """Match backlog methods."""
-        return "backlog" in method_name.lower()
-
-    def get_y_axis_name(self, method_name: str) -> str:
-        """Return backlog label."""
-        return "Backlog Count"
-
-    def is_percentage(self, method_name: str) -> bool:
-        """Backlog counts are never percentages."""
-        return False
+        return any(term in method_lower for term in ["breakdown", "by_"])
