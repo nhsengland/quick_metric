@@ -2,44 +2,40 @@
 Chart type definitions and registry.
 
 Provides:
-- @chart_type decorator for registering chart types
-- Base chart classes (LineChart, ColumnChart, BarChart)
+- @chart_type decorator for registering chart types (class or function)
+- ChartType base class for class-based charts
 - Registry functions for looking up chart types
-- ChartConfig for YAML-driven configuration
+- Auto-matching by method name when no chart_type specified
 
-Chart types are registered by name and referenced from YAML configuration.
-
-Example YAML Configuration
---------------------------
+YAML Configuration (bundled with metric definitions)
+-----------------------------------------------------
 ```yaml
-chart_config:
-  defaults:
-    enabled: true
-    figsize: [10, 6]
-    dpi: 150
+# Define chart types once with anchors
+chart_types:
+  compliance_rate: &chart_compliance_rate
+    chart_type: compliance_rate
+    # target and y_label come from registered chart type
 
-  methods:
-    monthly_compliance_rates:
-      chart_type: compliance_rate  # References registered chart type
-      include_table: true
+  compliance_count: &chart_compliance_count
+    chart_type: compliance_count
 
-    turnaround_compliance_counts:
-      chart_type: column
-      y_label: "Count"
+  mean_days: &chart_mean_days
+    chart_type: mean_days
 
-    mean_days_over_standard:
-      chart_type: line
-      target:
-        value: 0
-        label: "On Time"
-        color: green
+# Reference in metric definitions
+metric_instructions:
+  metric_1ai:
+    method: [monthly_compliance_rates, turnaround_compliance_counts]
+    filter: ...
+    charts:
+      monthly_compliance_rates: *chart_compliance_rate
+      turnaround_compliance_counts: *chart_compliance_count
 ```
 
-Example: Registering Custom Chart Types
----------------------------------------
+Registering Chart Types
+-----------------------
 ```python
-from quick_metric.charts import chart_type, ChartType, Target
-
+# Class-based (primary pattern)
 @chart_type(
     name="compliance_rate",
     chart_style="line",
@@ -47,8 +43,12 @@ from quick_metric.charts import chart_type, ChartType, Target
     target=Target(value=0.95, label="95% Target"),
 )
 class ComplianceRateChart(ChartType):
-    '''Line chart for compliance rate methods.'''
-    pass  # Uses defaults from decorator
+    pass
+
+# Function-based (alternative, like @metric_method)
+@chart_type(name="simple_line", chart_style="line", y_label="Value")
+def simple_line_chart():
+    pass
 ```
 """
 
@@ -57,7 +57,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import re
 import threading
-from typing import Any
+from typing import Any, Callable
 
 from loguru import logger
 
@@ -77,12 +77,12 @@ def chart_type(
     y_label: str = "Value",
     target: Target | None = None,
 ):
-    """Decorator to register a chart type.
+    """Decorator to register a chart type (class or function).
 
     Parameters
     ----------
     name : str | None
-        Name to register under. If None, uses class name in snake_case.
+        Name to register under. If None, uses class/function name in snake_case.
     chart_style : str
         Rendering style: 'line', 'column', or 'bar'
     y_label : str
@@ -93,22 +93,33 @@ def chart_type(
     Examples
     --------
     ```python
+    # Class-based (primary)
     @chart_type(name="compliance_rate", chart_style="line", y_label="Rate (%)")
     class ComplianceRateChart(ChartType):
-        '''Chart for compliance rate methods.'''
+        pass
+
+    # Function-based (alternative)
+    @chart_type(name="simple_line", chart_style="line")
+    def simple_line_chart():
         pass
     ```
     """
 
-    def decorator(cls):
-        # Create instance with settings
-        instance = cls()
+    def decorator(cls_or_func: type | Callable):
+        # Determine if class or function
+        if isinstance(cls_or_func, type):
+            # Class-based
+            instance = cls_or_func()
+            reg_name = name or _class_to_snake(cls_or_func.__name__)
+        else:
+            # Function-based - create a ChartType instance
+            instance = ChartType()
+            reg_name = name or cls_or_func.__name__
+
+        # Set attributes
         instance.chart_style = chart_style
         instance.y_label = y_label
         instance.default_target = target
-
-        # Determine registration name
-        reg_name = name or _class_to_snake(cls.__name__)
 
         # Register
         with _REGISTRY_LOCK:
@@ -117,7 +128,7 @@ def chart_type(
             _CHART_REGISTRY[reg_name] = instance
             logger.debug(f"Registered chart type: {reg_name}")
 
-        return cls
+        return cls_or_func
 
     return decorator
 
@@ -145,6 +156,34 @@ def get_chart_type(name: str) -> ChartType:
             available = list(_CHART_REGISTRY.keys())
             raise KeyError(f"Chart type '{name}' not found. Available: {available}")
         return _CHART_REGISTRY[name]
+
+
+def find_chart_type(method_name: str) -> ChartType | None:
+    """Find a chart type that matches a method name.
+
+    Tries exact match first, then partial matches.
+
+    Parameters
+    ----------
+    method_name : str
+        Method name to match
+
+    Returns
+    -------
+    ChartType | None
+        Matching chart type, or None if not found
+    """
+    with _REGISTRY_LOCK:
+        # Exact match
+        if method_name in _CHART_REGISTRY:
+            return _CHART_REGISTRY[method_name]
+
+        # Partial match - check if method contains chart type name
+        for chart_name, chart_obj in _CHART_REGISTRY.items():
+            if chart_name in method_name:
+                return chart_obj
+
+        return None
 
 
 def list_chart_types() -> list[str]:
@@ -215,15 +254,22 @@ class ChartType:
 # YAML Configuration Classes
 # =============================================================================
 
+# Code defaults - can be overridden in YAML
+_CODE_DEFAULTS = {
+    "enabled": True,
+    "figsize": (10, 6),
+    "dpi": 150,
+}
+
 
 @dataclass
 class MethodChartConfig:
-    """Configuration for a method's chart from YAML.
+    """Configuration for a method's chart.
 
     Attributes
     ----------
-    chart_type : str
-        Name of registered chart type to use
+    chart_type : str | None
+        Name of registered chart type. If None, auto-match by method name.
     enabled : bool
         Whether to generate chart for this method
     target : Target | None
@@ -234,59 +280,132 @@ class MethodChartConfig:
         Include data table below chart
     """
 
-    chart_type: str
+    chart_type: str | None = None  # None = auto-match by method name
     enabled: bool = True
     target: Target | None = None
     y_label: str | None = None
     include_table: bool = False
 
+    @classmethod
+    def from_dict(cls, data: dict) -> MethodChartConfig:
+        """Create from dictionary."""
+        target = None
+        if "target" in data:
+            t = data["target"]
+            target = Target(
+                value=t["value"],
+                label=t.get("label", "Target"),
+                color=t.get("color", "green"),
+            )
+
+        return cls(
+            chart_type=data.get("chart_type"),  # None if not specified
+            enabled=data.get("enabled", True),
+            target=target,
+            y_label=data.get("y_label"),
+            include_table=data.get("include_table", False),
+        )
+
 
 @dataclass
-class ChartConfig:
-    """Complete chart configuration loaded from YAML.
+class ChartDefaults:
+    """Default chart settings (code defaults, overridable in YAML).
 
     Attributes
     ----------
-    defaults : dict
+    enabled : bool
+        Whether charts are enabled by default
+    figsize : tuple[float, float]
+        Default figure size
+    dpi : int
+        Default resolution
+    """
+
+    enabled: bool = True
+    figsize: tuple[float, float] = (10, 6)
+    dpi: int = 150
+
+    @classmethod
+    def from_dict(cls, data: dict) -> ChartDefaults:
+        """Create from dictionary, merging with code defaults."""
+        return cls(
+            enabled=data.get("enabled", _CODE_DEFAULTS["enabled"]),
+            figsize=tuple(data.get("figsize", _CODE_DEFAULTS["figsize"])),
+            dpi=data.get("dpi", _CODE_DEFAULTS["dpi"]),
+        )
+
+
+@dataclass
+class ChartConfig:
+    """Complete chart configuration.
+
+    Can be loaded from YAML or constructed programmatically.
+    Code defaults are used unless overridden in YAML.
+
+    Attributes
+    ----------
+    defaults : ChartDefaults
         Default settings for all charts
     methods : dict[str, MethodChartConfig]
         Per-method chart configurations
     """
 
-    defaults: dict = field(
-        default_factory=lambda: {"enabled": True, "figsize": (10, 6), "dpi": 150}
-    )
+    defaults: ChartDefaults = field(default_factory=ChartDefaults)
     methods: dict[str, MethodChartConfig] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict) -> ChartConfig:
-        """Load from dictionary (parsed YAML)."""
-        defaults = data.get("defaults", {})
+        """Load from dictionary (parsed YAML).
+
+        Handles both top-level chart_config and metric-bundled charts.
+        """
+        defaults = ChartDefaults.from_dict(data.get("defaults", {}))
 
         methods = {}
         for method_name, method_data in data.get("methods", {}).items():
-            target = None
-            if "target" in method_data:
-                t = method_data["target"]
-                target = Target(
-                    value=t["value"],
-                    label=t.get("label", "Target"),
-                    color=t.get("color", "green"),
-                )
+            methods[method_name] = MethodChartConfig.from_dict(method_data)
 
-            methods[method_name] = MethodChartConfig(
-                chart_type=method_data.get("chart_type", "line"),
-                enabled=method_data.get("enabled", True),
-                target=target,
-                y_label=method_data.get("y_label"),
-                include_table=method_data.get("include_table", False),
-            )
+        return cls(defaults=defaults, methods=methods)
+
+    @classmethod
+    def from_metric_instructions(
+        cls, metric_instructions: dict, defaults_data: dict | None = None
+    ) -> ChartConfig:
+        """Extract chart config from metric_instructions.
+
+        Collects charts from each metric definition.
+
+        Parameters
+        ----------
+        metric_instructions : dict
+            The metric_instructions section from YAML
+        defaults_data : dict | None
+            Optional defaults override
+
+        Returns
+        -------
+        ChartConfig
+            Merged chart configuration
+        """
+        defaults = ChartDefaults.from_dict(defaults_data or {})
+        methods: dict[str, MethodChartConfig] = {}
+
+        for metric_def in metric_instructions.values():
+            charts = metric_def.get("charts", {})
+            for method_name, chart_data in charts.items():
+                if isinstance(chart_data, dict):
+                    methods[method_name] = MethodChartConfig.from_dict(chart_data)
+                # If chart_data is just a reference (from anchor), it's already a dict
 
         return cls(defaults=defaults, methods=methods)
 
     def get_config_for_method(self, method_name: str) -> MethodChartConfig | None:
         """Get chart config for a method, or None if not configured."""
         return self.methods.get(method_name)
+
+    def add_method(self, method_name: str, config: MethodChartConfig) -> None:
+        """Add or update a method's chart configuration."""
+        self.methods[method_name] = config
 
 
 # =============================================================================

@@ -3,6 +3,15 @@ MetricsStore integration for chart generation.
 
 Provides functions to generate charts from MetricsStore results using
 either YAML configuration or chart class definitions.
+
+Auto-Matching
+-------------
+When chart_type is not specified in config, the system attempts to
+auto-match by method name:
+1. Exact match: method name == chart type name
+2. Partial match: method name contains chart type name
+
+This allows minimal config when method names are descriptive.
 """
 
 from __future__ import annotations
@@ -14,7 +23,12 @@ from loguru import logger
 import pandas as pd
 
 from quick_metric.charts.core import ChartSettings
-from quick_metric.charts.definitions import ChartConfig, get_chart_type
+from quick_metric.charts.definitions import (
+    ChartConfig,
+    MethodChartConfig,
+    find_chart_type,
+    get_chart_type,
+)
 from quick_metric.charts.seaborn_renderer import create_chart
 from quick_metric.results import DataFrameResult, ScalarResult, SeriesResult
 
@@ -29,6 +43,7 @@ def charts_from_store(
     chart_config: ChartConfig | None = None,
     output_dir: Path | str | None = None,
     file_format: str = "png",
+    auto_match: bool = True,
 ) -> dict[tuple[str, str], Figure]:
     """Generate charts for all configured methods in a MetricsStore.
 
@@ -42,6 +57,9 @@ def charts_from_store(
         Directory to save charts. If None, charts are not saved.
     file_format : str
         Image format for saved files (png, svg, pdf)
+    auto_match : bool
+        If True, attempt to auto-match method names to chart types
+        when no explicit chart_type is specified
 
     Returns
     -------
@@ -54,11 +72,14 @@ def charts_from_store(
     import yaml
     from quick_metric.charts import ChartConfig, charts_from_store
 
-    # Load config from YAML
+    # Load config from YAML (bundled with metric_instructions)
     with open("config.yaml") as f:
         config_data = yaml.safe_load(f)
 
-    chart_config = ChartConfig.from_dict(config_data.get("chart_config", {}))
+    # Extract chart config from metric_instructions
+    chart_config = ChartConfig.from_metric_instructions(
+        config_data.get("metric_instructions", {})
+    )
 
     charts = charts_from_store(
         store,
@@ -72,24 +93,15 @@ def charts_from_store(
     charts: dict[tuple[str, str], Figure] = {}
 
     for metric, method, result in store.all():
-        # Check if method has chart config
-        method_config = config.get_config_for_method(method)
+        # Get chart type - explicit config, auto-match, or skip
+        chart_type_obj, method_config = _resolve_chart_type(method, config, auto_match=auto_match)
 
-        if method_config is None:
-            logger.debug(f"No chart config for: {metric}.{method}")
+        if chart_type_obj is None:
+            logger.debug(f"No chart type for: {metric}.{method}")
             continue
 
-        if not method_config.enabled:
+        if method_config and not method_config.enabled:
             logger.debug(f"Chart disabled for: {metric}.{method}")
-            continue
-
-        # Get chart type from registry
-        try:
-            chart_type_obj = get_chart_type(method_config.chart_type)
-        except KeyError:
-            logger.warning(
-                f"Chart type '{method_config.chart_type}' not registered for {metric}.{method}"
-            )
             continue
 
         # Get data as DataFrame
@@ -100,13 +112,7 @@ def charts_from_store(
             continue
 
         # Build settings from chart type defaults + method config overrides
-        settings = ChartSettings(
-            y_label=method_config.y_label or chart_type_obj.y_label,
-            target=method_config.target or chart_type_obj.default_target,
-            include_table=method_config.include_table,
-            figsize=tuple(config.defaults.get("figsize", (10, 6))),
-            dpi=config.defaults.get("dpi", 150),
-        )
+        settings = _build_settings(chart_type_obj, method_config, config)
 
         # Generate output path if saving
         save_path = None
@@ -126,6 +132,84 @@ def charts_from_store(
         logger.info(f"Created chart: {metric}.{method}")
 
     return charts
+
+
+def _resolve_chart_type(
+    method_name: str,
+    config: ChartConfig,
+    auto_match: bool = True,
+) -> tuple:
+    """Resolve chart type for a method.
+
+    Priority:
+    1. Explicit chart_type in method config
+    2. Auto-match by method name (if enabled)
+    3. None
+
+    Returns
+    -------
+    tuple[ChartType | None, MethodChartConfig | None]
+        Chart type and optional method config
+    """
+
+    method_config = config.get_config_for_method(method_name)
+
+    # 1. Explicit chart_type in config
+    if method_config and method_config.chart_type:
+        try:
+            chart_type_obj = get_chart_type(method_config.chart_type)
+            return chart_type_obj, method_config
+        except KeyError:
+            logger.warning(
+                f"Chart type '{method_config.chart_type}' not registered for {method_name}"
+            )
+            return None, method_config
+
+    # 2. Auto-match by method name
+    if auto_match:
+        chart_type_obj = find_chart_type(method_name)
+        if chart_type_obj:
+            logger.debug(f"Auto-matched chart type for: {method_name}")
+            return chart_type_obj, method_config
+
+    # 3. Method config exists but no chart_type (with auto_match disabled)
+    if method_config:
+        # Use default 'line' if enabled
+        try:
+            chart_type_obj = get_chart_type("line")
+            return chart_type_obj, method_config
+        except KeyError:
+            return None, method_config
+
+    return None, None
+
+
+def _build_settings(
+    chart_type_obj,
+    method_config: MethodChartConfig | None,
+    config: ChartConfig,
+) -> ChartSettings:
+    """Build chart settings from chart type defaults and config overrides."""
+    # Start with chart type defaults
+    y_label = chart_type_obj.y_label
+    target = chart_type_obj.default_target
+    include_table = False
+
+    # Apply method config overrides
+    if method_config:
+        if method_config.y_label:
+            y_label = method_config.y_label
+        if method_config.target:
+            target = method_config.target
+        include_table = method_config.include_table
+
+    return ChartSettings(
+        y_label=y_label,
+        target=target,
+        include_table=include_table,
+        figsize=config.defaults.figsize,
+        dpi=config.defaults.dpi,
+    )
 
 
 def _result_to_chart_df(result) -> pd.DataFrame:
@@ -162,7 +246,7 @@ def _result_to_chart_df(result) -> pd.DataFrame:
 
 def chart_result(
     result,
-    chart_type_name: str,
+    chart_type_name: str | None = None,
     output_path: Path | str | None = None,
     **setting_overrides,
 ) -> Figure:
@@ -172,8 +256,8 @@ def chart_result(
     ----------
     result : MetricResult
         Result to chart
-    chart_type_name : str
-        Name of registered chart type to use
+    chart_type_name : str | None
+        Name of registered chart type to use. If None, auto-match by method name.
     output_path : Path | str | None
         Path to save the chart
     **setting_overrides
@@ -187,13 +271,25 @@ def chart_result(
     Examples
     --------
     ```python
+    # Explicit chart type
     result = store["my_metric", "compliance_rate"]
     fig = chart_result(result, "compliance_rate", y_label="Custom Label")
+
+    # Auto-match by method name
+    fig = chart_result(result)  # Will try to match 'compliance_rate'
     ```
     """
-    chart_type_obj = get_chart_type(chart_type_name)
-    df = _result_to_chart_df(result)
+    # Resolve chart type
+    if chart_type_name:
+        chart_type_obj = get_chart_type(chart_type_name)
+    else:
+        # Auto-match by method name
+        chart_type_obj = find_chart_type(result.method)
+        if chart_type_obj is None:
+            # Fall back to line chart
+            chart_type_obj = get_chart_type("line")
 
+    df = _result_to_chart_df(result)
     settings = chart_type_obj.get_settings(**setting_overrides)
 
     return create_chart(

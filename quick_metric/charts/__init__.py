@@ -1,32 +1,29 @@
 """
 NHS-branded chart generation for quick_metric.
 
-Charts are configured via YAML and use registered chart types.
+Charts are configured via YAML (bundled with metric definitions) and use
+registered chart types. Auto-matching by method name is supported.
 
-YAML Configuration
-------------------
+YAML Configuration (bundled with metric_instructions)
+------------------------------------------------------
 ```yaml
-chart_config:
-  defaults:
-    enabled: true
-    figsize: [10, 6]
-    dpi: 150
+# Define chart types once with anchors
+chart_types:
+  compliance_rate: &chart_compliance_rate
+    chart_type: compliance_rate
+    # target and y_label come from registered chart type
 
-  methods:
-    monthly_compliance_rates:
-      chart_type: compliance_rate  # References registered type
-      include_table: true
+  compliance_count: &chart_compliance_count
+    chart_type: column
 
-    turnaround_compliance_counts:
-      chart_type: column
-      y_label: "Count"
-
-    mean_days_over_standard:
-      chart_type: line
-      target:
-        value: 0
-        label: "On Time"
-        color: green
+# Reference in metric definitions
+metric_instructions:
+  metric_1ai:
+    method: [monthly_compliance_rates, turnaround_compliance_counts]
+    filter: ...
+    charts:
+      monthly_compliance_rates: *chart_compliance_rate
+      turnaround_compliance_counts: *chart_compliance_count
 ```
 
 Registering Custom Chart Types
@@ -34,6 +31,7 @@ Registering Custom Chart Types
 ```python
 from quick_metric.charts import chart_type, ChartType, Target
 
+# Class-based (primary pattern)
 @chart_type(
     name="compliance_rate",
     chart_style="line",
@@ -43,6 +41,22 @@ from quick_metric.charts import chart_type, ChartType, Target
 class ComplianceRateChart(ChartType):
     '''Registered as "compliance_rate" for YAML reference.'''
     pass
+
+# Function-based (alternative, like @metric_method)
+@chart_type(name="simple_line", chart_style="line", y_label="Value")
+def simple_line_chart():
+    pass
+```
+
+Auto-Matching
+-------------
+When no chart_type is specified, the system tries to match the method name
+to a registered chart type:
+
+```python
+# Method 'monthly_compliance_rates' will auto-match to 'compliance_rate'
+# if that chart type is registered and contains 'compliance_rate' in name
+fig = chart_result(result)  # No chart_type needed
 ```
 
 Direct Chart Creation
@@ -73,11 +87,13 @@ from quick_metric.charts.core import (
 from quick_metric.charts.definitions import (
     BarChart,
     ChartConfig,
+    ChartDefaults,
     ChartType,
     ColumnChart,
     LineChart,
     MethodChartConfig,
     chart_type,
+    find_chart_type,
     get_all_chart_types,
     get_chart_type,
     list_chart_types,
@@ -98,6 +114,7 @@ __all__ = [
     "chart_type",
     "ChartType",
     "get_chart_type",
+    "find_chart_type",
     "list_chart_types",
     "get_all_chart_types",
     # Built-in chart types
@@ -106,6 +123,7 @@ __all__ = [
     "BarChart",
     # YAML configuration
     "ChartConfig",
+    "ChartDefaults",
     "MethodChartConfig",
     # Rendering
     "create_chart",
