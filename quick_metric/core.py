@@ -69,6 +69,7 @@ method_definitions : Method registration system used by this module
 from pathlib import Path
 from typing import Optional, Union
 
+import dask.dataframe as dd
 from loguru import logger
 import pandas as pd
 
@@ -82,7 +83,7 @@ from quick_metric.store import MetricsStore
 
 
 def interpret_metric_instructions(
-    data: pd.DataFrame,
+    data: Union[pd.DataFrame, dd.DataFrame],
     metric_instructions: dict,
     metrics_methods: Optional[dict] = None,
 ) -> MetricsStore:
@@ -94,8 +95,8 @@ def interpret_metric_instructions(
 
     Parameters
     ----------
-    data : pd.DataFrame
-        The DataFrame to be processed.
+    data : Union[pd.DataFrame, dd.DataFrame]
+        The DataFrame to be processed (pandas or Dask).
     metric_instructions : dict
         Dictionary containing the metrics and their filter/method conditions.
         May include a top-level 'split_by' key to apply globally.
@@ -164,10 +165,14 @@ def interpret_metric_instructions(
     }
     ```
     """
+    # Convert pandas DataFrame to Dask if needed (for backwards compatibility)
+    if isinstance(data, pd.DataFrame):
+        data = dd.from_pandas(data, npartitions=1)
+
     if metrics_methods is None:
         metrics_methods = METRICS_METHODS
 
-    logger.info(f"Processing {len(metric_instructions)} metrics on DataFrame with {len(data)} rows")
+    logger.info(f"Processing {len(metric_instructions)} metrics on DataFrame")
 
     # Basic validation
     if not isinstance(metric_instructions, dict):
@@ -175,7 +180,7 @@ def interpret_metric_instructions(
             "metric_instructions must be a dictionary", method_spec=metric_instructions
         )
 
-    if data.empty:
+    if data.npartitions == 0:
         logger.warning("Input DataFrame is empty")
 
     # Extract and normalize global split_by
@@ -224,7 +229,7 @@ def interpret_metric_instructions(
                 filter_spec = metric_instruction["filter"]
 
             filtered_data = apply_filter(data_df=data, filters=filter_spec)
-            logger.trace(f"Filtered to {len(filtered_data)} rows")
+            logger.trace("Filter applied")
 
             # Normalize method specifications
             normalized_methods = normalize_method_specs(metric_instruction["method"])
@@ -256,7 +261,7 @@ def interpret_metric_instructions(
 
 
 def generate_metrics(
-    data: pd.DataFrame,
+    data: Union[pd.DataFrame, dd.DataFrame],
     config: Union[Path, dict],
     metrics_methods: Optional[dict] = None,
 ) -> MetricsStore:
@@ -272,8 +277,8 @@ def generate_metrics(
 
     Parameters
     ----------
-    data : pd.DataFrame
-        The DataFrame to process
+    data : Union[pd.DataFrame, dd.DataFrame]
+        The DataFrame to process (pandas or Dask)
     config : Path or dict
         Path to a YAML configuration file or a dictionary of metric instructions.
 
@@ -373,6 +378,11 @@ def generate_metrics(
         If config parameter is not a valid type.
     """
     logger.info("Starting metric generation")
+
+    # Convert pandas DataFrame to Dask if needed
+    if isinstance(data, pd.DataFrame):
+        logger.debug("Converting pandas DataFrame to Dask")
+        data = dd.from_pandas(data, npartitions=1)
 
     # Handle different config input types
     if isinstance(config, Path):
