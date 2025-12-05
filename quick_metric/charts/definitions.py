@@ -1,156 +1,309 @@
 """
-Base chart type definitions.
+Chart type definitions and registry.
 
-Provides abstract base classes for chart types that can be extended
-by consuming pipelines for domain-specific charts.
+Provides:
+- @chart_type decorator for registering chart types
+- Base chart classes (LineChart, ColumnChart, BarChart)
+- Registry functions for looking up chart types
+- ChartConfig for YAML-driven configuration
 
-Example Usage in Consuming Pipeline
------------------------------------
+Chart types are registered by name and referenced from YAML configuration.
+
+Example YAML Configuration
+--------------------------
+```yaml
+chart_config:
+  defaults:
+    enabled: true
+    figsize: [10, 6]
+    dpi: 150
+
+  methods:
+    monthly_compliance_rates:
+      chart_type: compliance_rate  # References registered chart type
+      include_table: true
+
+    turnaround_compliance_counts:
+      chart_type: column
+      y_label: "Count"
+
+    mean_days_over_standard:
+      chart_type: line
+      target:
+        value: 0
+        label: "On Time"
+        color: green
+```
+
+Example: Registering Custom Chart Types
+---------------------------------------
 ```python
-from quick_metric.charts import LineChart, ColumnChart, Target
+from quick_metric.charts import chart_type, ChartType, Target
 
-class ComplianceRateChart(LineChart):
+@chart_type(
+    name="compliance_rate",
+    chart_style="line",
+    y_label="Compliance Rate (%)",
+    target=Target(value=0.95, label="95% Target"),
+)
+class ComplianceRateChart(ChartType):
     '''Line chart for compliance rate methods.'''
-
-    y_label = "Compliance Rate (%)"
-    default_target = Target(value=0.95, label="95% Target")
-
-    def matches(self, method_name: str) -> bool:
-        return "compliance_rate" in method_name.lower()
+    pass  # Uses defaults from decorator
 ```
 """
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+import re
+import threading
+from typing import Any
+
+from loguru import logger
 
 from quick_metric.charts.core import ChartSettings, Target, snake_to_title
 
-if TYPE_CHECKING:
-    pass
+# =============================================================================
+# Chart Type Registry
+# =============================================================================
+
+_CHART_REGISTRY: dict[str, ChartType] = {}
+_REGISTRY_LOCK = threading.RLock()
 
 
-class BaseChart(ABC):
-    """Abstract base class for chart types.
+def chart_type(
+    name: str | None = None,
+    chart_style: str = "line",
+    y_label: str = "Value",
+    target: Target | None = None,
+):
+    """Decorator to register a chart type.
 
-    Subclass this to create domain-specific chart types in your pipeline.
-    The chart type determines rendering style and default settings.
+    Parameters
+    ----------
+    name : str | None
+        Name to register under. If None, uses class name in snake_case.
+    chart_style : str
+        Rendering style: 'line', 'column', or 'bar'
+    y_label : str
+        Default Y-axis label
+    target : Target | None
+        Default target line
+
+    Examples
+    --------
+    ```python
+    @chart_type(name="compliance_rate", chart_style="line", y_label="Rate (%)")
+    class ComplianceRateChart(ChartType):
+        '''Chart for compliance rate methods.'''
+        pass
+    ```
+    """
+
+    def decorator(cls):
+        # Create instance with settings
+        instance = cls()
+        instance.chart_style = chart_style
+        instance.y_label = y_label
+        instance.default_target = target
+
+        # Determine registration name
+        reg_name = name or _class_to_snake(cls.__name__)
+
+        # Register
+        with _REGISTRY_LOCK:
+            if reg_name in _CHART_REGISTRY:
+                logger.warning(f"Chart type '{reg_name}' already registered, overwriting")
+            _CHART_REGISTRY[reg_name] = instance
+            logger.debug(f"Registered chart type: {reg_name}")
+
+        return cls
+
+    return decorator
+
+
+def get_chart_type(name: str) -> ChartType:
+    """Get a registered chart type by name.
+
+    Parameters
+    ----------
+    name : str
+        Registered name of the chart type
+
+    Returns
+    -------
+    ChartType
+        The registered chart type instance
+
+    Raises
+    ------
+    KeyError
+        If chart type not found
+    """
+    with _REGISTRY_LOCK:
+        if name not in _CHART_REGISTRY:
+            available = list(_CHART_REGISTRY.keys())
+            raise KeyError(f"Chart type '{name}' not found. Available: {available}")
+        return _CHART_REGISTRY[name]
+
+
+def list_chart_types() -> list[str]:
+    """List all registered chart type names."""
+    with _REGISTRY_LOCK:
+        return list(_CHART_REGISTRY.keys())
+
+
+def get_all_chart_types() -> dict[str, ChartType]:
+    """Get all registered chart types."""
+    with _REGISTRY_LOCK:
+        return dict(_CHART_REGISTRY)
+
+
+def _class_to_snake(name: str) -> str:
+    """Convert CamelCase to snake_case."""
+    # Remove 'Chart' suffix if present
+    if name.endswith("Chart"):
+        name = name[:-5]
+    # Convert to snake_case
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+
+
+# =============================================================================
+# Chart Type Base Class
+# =============================================================================
+
+
+class ChartType:
+    """Base class for chart types.
+
+    Subclass and decorate with @chart_type to register.
 
     Attributes
     ----------
-    chart_type : str
-        Rendering type: 'line', 'column', or 'bar'
+    chart_style : str
+        Rendering style: 'line', 'column', or 'bar'
     y_label : str
         Default Y-axis label
     default_target : Target | None
-        Default target line (can be overridden per-call)
+        Default target line
     """
 
-    chart_type: str = "line"
+    chart_style: str = "line"
     y_label: str = "Value"
     default_target: Target | None = None
 
-    @abstractmethod
-    def matches(self, method_name: str) -> bool:
-        """Check if this chart type should be used for a method.
-
-        Parameters
-        ----------
-        method_name : str
-            Name of the metric method
-
-        Returns
-        -------
-        bool
-            True if this chart type matches the method
-        """
-
     def get_title(self, method_name: str, metric_name: str | None = None) -> str:
-        """Generate chart title from method and metric names.
-
-        Parameters
-        ----------
-        method_name : str
-            Name of the metric method
-        metric_name : str | None
-            Name of the parent metric
-
-        Returns
-        -------
-        str
-            Chart title
-        """
+        """Generate chart title."""
         title = snake_to_title(method_name)
         if metric_name:
             title = f"{snake_to_title(metric_name)}: {title}"
         return title
 
-    def get_settings(self, **overrides: object) -> ChartSettings:
-        """Get chart settings with defaults and any overrides.
-
-        Parameters
-        ----------
-        **overrides
-            Settings to override defaults
-
-        Returns
-        -------
-        ChartSettings
-            Merged settings
-        """
+    def get_settings(self, **overrides: Any) -> ChartSettings:
+        """Get chart settings with defaults and overrides."""
         settings = ChartSettings(
             y_label=self.y_label,
             target=self.default_target,
         )
-
-        # Apply overrides
         for key, value in overrides.items():
             if hasattr(settings, key) and value is not None:
                 setattr(settings, key, value)
-
         return settings
 
 
-class LineChart(BaseChart):
-    """Base line chart type.
+# =============================================================================
+# YAML Configuration Classes
+# =============================================================================
 
-    Use for time series, trends, and continuous data.
+
+@dataclass
+class MethodChartConfig:
+    """Configuration for a method's chart from YAML.
+
+    Attributes
+    ----------
+    chart_type : str
+        Name of registered chart type to use
+    enabled : bool
+        Whether to generate chart for this method
+    target : Target | None
+        Override default target
+    y_label : str | None
+        Override default Y-axis label
+    include_table : bool
+        Include data table below chart
     """
 
-    chart_type = "line"
+    chart_type: str
+    enabled: bool = True
+    target: Target | None = None
+    y_label: str | None = None
+    include_table: bool = False
 
-    def matches(self, method_name: str) -> bool:
-        """Default: match rate/percentage methods."""
-        method_lower = method_name.lower()
-        return any(term in method_lower for term in ["rate", "percentage", "percent", "trend"])
 
+@dataclass
+class ChartConfig:
+    """Complete chart configuration loaded from YAML.
 
-class ColumnChart(BaseChart):
-    """Base column (vertical bar) chart type.
-
-    Use for counts, volumes, and categorical comparisons.
+    Attributes
+    ----------
+    defaults : dict
+        Default settings for all charts
+    methods : dict[str, MethodChartConfig]
+        Per-method chart configurations
     """
 
-    chart_type = "column"
-    y_label = "Count"
+    defaults: dict = field(
+        default_factory=lambda: {"enabled": True, "figsize": (10, 6), "dpi": 150}
+    )
+    methods: dict[str, MethodChartConfig] = field(default_factory=dict)
 
-    def matches(self, method_name: str) -> bool:
-        """Default: match count/volume methods."""
-        method_lower = method_name.lower()
-        return any(term in method_lower for term in ["count", "volume", "total"])
+    @classmethod
+    def from_dict(cls, data: dict) -> ChartConfig:
+        """Load from dictionary (parsed YAML)."""
+        defaults = data.get("defaults", {})
+
+        methods = {}
+        for method_name, method_data in data.get("methods", {}).items():
+            target = None
+            if "target" in method_data:
+                t = method_data["target"]
+                target = Target(
+                    value=t["value"],
+                    label=t.get("label", "Target"),
+                    color=t.get("color", "green"),
+                )
+
+            methods[method_name] = MethodChartConfig(
+                chart_type=method_data.get("chart_type", "line"),
+                enabled=method_data.get("enabled", True),
+                target=target,
+                y_label=method_data.get("y_label"),
+                include_table=method_data.get("include_table", False),
+            )
+
+        return cls(defaults=defaults, methods=methods)
+
+    def get_config_for_method(self, method_name: str) -> MethodChartConfig | None:
+        """Get chart config for a method, or None if not configured."""
+        return self.methods.get(method_name)
 
 
-class BarChart(BaseChart):
-    """Base bar (horizontal) chart type.
+# =============================================================================
+# Built-in Chart Types
+# =============================================================================
 
-    Use for categorical comparisons where labels are long.
-    """
 
-    chart_type = "bar"
-    y_label = "Value"
+@chart_type(name="line", chart_style="line", y_label="Value")
+class LineChart(ChartType):
+    """Generic line chart for time series and trends."""
 
-    def matches(self, method_name: str) -> bool:
-        """Default: match breakdown/by_ methods."""
-        method_lower = method_name.lower()
-        return any(term in method_lower for term in ["breakdown", "by_"])
+
+@chart_type(name="column", chart_style="column", y_label="Count")
+class ColumnChart(ChartType):
+    """Generic column chart for counts and comparisons."""
+
+
+@chart_type(name="bar", chart_style="bar", y_label="Value")
+class BarChart(ChartType):
+    """Generic horizontal bar chart."""

@@ -26,8 +26,6 @@ if TYPE_CHECKING:
     from matplotlib.axes import Axes
     from matplotlib.figure import Figure
 
-    from quick_metric.charts.definitions import BaseChart
-
 
 def apply_nhs_style(ax: Axes, settings: ChartSettings, method_name: str) -> None:
     """Apply NHS branding and styling to a matplotlib axes.
@@ -263,45 +261,3 @@ def create_chart(
         logger.info(f"Chart saved: {path}")
 
     return fig
-
-
-def create_chart_from_chart_class(
-    df: pd.DataFrame,
-    method_name: str,
-    chart_class: BaseChart,
-    metric_name: str | None = None,
-    output_path: Path | str | None = None,
-    **setting_overrides: object,
-) -> Figure:
-    """Create a chart using a chart class definition.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Data to chart
-    method_name : str
-        Method name
-    chart_class : BaseChart
-        Chart class instance defining type and defaults
-    metric_name : str | None
-        Optional metric name for title
-    output_path : Path | str | None
-        Path to save the chart
-    **setting_overrides
-        Override any default settings
-
-    Returns
-    -------
-    Figure
-        Matplotlib figure
-    """
-    settings = chart_class.get_settings(**setting_overrides)
-    settings.title = chart_class.get_title(method_name, metric_name)
-
-    return create_chart(
-        df=df,
-        method_name=method_name,
-        chart_type=chart_class.chart_type,
-        settings=settings,
-        output_path=output_path,
-    )

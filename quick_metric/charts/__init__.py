@@ -1,54 +1,63 @@
 """
 NHS-branded chart generation for quick_metric.
 
-This module provides base chart types and rendering functions that can be
-extended by consuming pipelines for domain-specific visualizations.
+Charts are configured via YAML and use registered chart types.
 
-Quick Start
------------
+YAML Configuration
+------------------
+```yaml
+chart_config:
+  defaults:
+    enabled: true
+    figsize: [10, 6]
+    dpi: 150
+
+  methods:
+    monthly_compliance_rates:
+      chart_type: compliance_rate  # References registered type
+      include_table: true
+
+    turnaround_compliance_counts:
+      chart_type: column
+      y_label: "Count"
+
+    mean_days_over_standard:
+      chart_type: line
+      target:
+        value: 0
+        label: "On Time"
+        color: green
+```
+
+Registering Custom Chart Types
+------------------------------
+```python
+from quick_metric.charts import chart_type, ChartType, Target
+
+@chart_type(
+    name="compliance_rate",
+    chart_style="line",
+    y_label="Compliance Rate (%)",
+    target=Target(value=0.95, label="95% Target"),
+)
+class ComplianceRateChart(ChartType):
+    '''Registered as "compliance_rate" for YAML reference.'''
+    pass
+```
+
+Direct Chart Creation
+---------------------
 ```python
 from quick_metric.charts import create_chart, ChartSettings, Target
 
-# Simple chart from DataFrame
 fig = create_chart(
     df=result_df,
     method_name="compliance_rate",
     chart_type="line",
-)
-
-# With settings
-settings = ChartSettings(
-    target=Target(value=0.95, label="95% Target"),
-    y_label="Compliance Rate (%)",
-)
-fig = create_chart(df, "compliance_rate", settings=settings)
-```
-
-Extending for Domain-Specific Charts
-------------------------------------
-```python
-from quick_metric.charts import LineChart, Target
-
-class ComplianceRateChart(LineChart):
-    '''Line chart for compliance rate methods.'''
-
-    y_label = "Compliance Rate (%)"
-    default_target = Target(value=0.95, label="95% Target")
-
-    def matches(self, method_name: str) -> bool:
-        return "compliance_rate" in method_name.lower()
-```
-
-Integration with MetricsStore
------------------------------
-```python
-from quick_metric.charts import charts_from_store
-
-# Generate all charts from a store
-charts = charts_from_store(
-    store,
-    chart_classes=[ComplianceRateChart(), CountChart()],
-    output_dir="charts/",
+    settings=ChartSettings(
+        target=Target(value=0.95, label="95% Target"),
+        y_label="Compliance Rate (%)",
+    ),
 )
 ```
 """
@@ -63,14 +72,19 @@ from quick_metric.charts.core import (
 )
 from quick_metric.charts.definitions import (
     BarChart,
-    BaseChart,
+    ChartConfig,
+    ChartType,
     ColumnChart,
     LineChart,
+    MethodChartConfig,
+    chart_type,
+    get_all_chart_types,
+    get_chart_type,
+    list_chart_types,
 )
 from quick_metric.charts.excel_renderer import create_excel_chart
 from quick_metric.charts.seaborn_renderer import (
     create_chart,
-    create_chart_from_chart_class,
 )
 from quick_metric.charts.store_integration import chart_result, charts_from_store
 
@@ -80,14 +94,21 @@ __all__ = [
     "Target",
     "NHS_COLOURS",
     "NHS_COLOUR_CYCLE",
-    # Base chart types
-    "BaseChart",
+    # Chart type registration
+    "chart_type",
+    "ChartType",
+    "get_chart_type",
+    "list_chart_types",
+    "get_all_chart_types",
+    # Built-in chart types
     "LineChart",
     "ColumnChart",
     "BarChart",
+    # YAML configuration
+    "ChartConfig",
+    "MethodChartConfig",
     # Rendering
     "create_chart",
-    "create_chart_from_chart_class",
     "create_excel_chart",
     # Store integration
     "charts_from_store",

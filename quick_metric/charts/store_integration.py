@@ -2,7 +2,7 @@
 MetricsStore integration for chart generation.
 
 Provides functions to generate charts from MetricsStore results using
-chart class definitions.
+either YAML configuration or chart class definitions.
 """
 
 from __future__ import annotations
@@ -13,30 +13,31 @@ from typing import TYPE_CHECKING
 from loguru import logger
 import pandas as pd
 
-from quick_metric.charts.seaborn_renderer import create_chart_from_chart_class
+from quick_metric.charts.core import ChartSettings
+from quick_metric.charts.definitions import ChartConfig, get_chart_type
+from quick_metric.charts.seaborn_renderer import create_chart
 from quick_metric.results import DataFrameResult, ScalarResult, SeriesResult
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
-    from quick_metric.charts.definitions import BaseChart
     from quick_metric.store import MetricsStore
 
 
 def charts_from_store(
     store: MetricsStore,
-    chart_classes: list[BaseChart],
+    chart_config: ChartConfig | None = None,
     output_dir: Path | str | None = None,
     file_format: str = "png",
 ) -> dict[tuple[str, str], Figure]:
-    """Generate charts for all matching results in a MetricsStore.
+    """Generate charts for all configured methods in a MetricsStore.
 
     Parameters
     ----------
     store : MetricsStore
         Store containing metric results
-    chart_classes : list[BaseChart]
-        List of chart class instances to match against methods
+    chart_config : ChartConfig | None
+        Chart configuration from YAML. If None, uses defaults.
     output_dir : Path | str | None
         Directory to save charts. If None, charts are not saved.
     file_format : str
@@ -50,37 +51,45 @@ def charts_from_store(
     Examples
     --------
     ```python
-    from quick_metric.charts import LineChart, ColumnChart, charts_from_store
+    import yaml
+    from quick_metric.charts import ChartConfig, charts_from_store
 
-    class RateChart(LineChart):
-        y_label = "Rate (%)"
-        def matches(self, method_name):
-            return "rate" in method_name.lower()
+    # Load config from YAML
+    with open("config.yaml") as f:
+        config_data = yaml.safe_load(f)
 
-    class CountChart(ColumnChart):
-        def matches(self, method_name):
-            return "count" in method_name.lower()
+    chart_config = ChartConfig.from_dict(config_data.get("chart_config", {}))
 
     charts = charts_from_store(
         store,
-        chart_classes=[RateChart(), CountChart()],
+        chart_config=chart_config,
         output_dir="output/charts/",
     )
     ```
     """
+    config = chart_config or ChartConfig()
     output_path = Path(output_dir) if output_dir else None
     charts: dict[tuple[str, str], Figure] = {}
 
     for metric, method, result in store.all():
-        # Find matching chart class
-        matching_chart = None
-        for chart_cls in chart_classes:
-            if chart_cls.matches(method):
-                matching_chart = chart_cls
-                break
+        # Check if method has chart config
+        method_config = config.get_config_for_method(method)
 
-        if matching_chart is None:
-            logger.debug(f"No chart class matches: {metric}.{method}")
+        if method_config is None:
+            logger.debug(f"No chart config for: {metric}.{method}")
+            continue
+
+        if not method_config.enabled:
+            logger.debug(f"Chart disabled for: {metric}.{method}")
+            continue
+
+        # Get chart type from registry
+        try:
+            chart_type_obj = get_chart_type(method_config.chart_type)
+        except KeyError:
+            logger.warning(
+                f"Chart type '{method_config.chart_type}' not registered for {metric}.{method}"
+            )
             continue
 
         # Get data as DataFrame
@@ -90,17 +99,26 @@ def charts_from_store(
             logger.warning(f"Cannot chart {metric}.{method}: {e}")
             continue
 
+        # Build settings from chart type defaults + method config overrides
+        settings = ChartSettings(
+            y_label=method_config.y_label or chart_type_obj.y_label,
+            target=method_config.target or chart_type_obj.default_target,
+            include_table=method_config.include_table,
+            figsize=tuple(config.defaults.get("figsize", (10, 6))),
+            dpi=config.defaults.get("dpi", 150),
+        )
+
         # Generate output path if saving
         save_path = None
         if output_path:
             save_path = output_path / f"{metric}_{method}.{file_format}"
 
         # Create chart
-        fig = create_chart_from_chart_class(
+        fig = create_chart(
             df=df,
             method_name=method,
-            chart_class=matching_chart,
-            metric_name=metric,
+            chart_type=chart_type_obj.chart_style,
+            settings=settings,
             output_path=save_path,
         )
 
@@ -144,7 +162,7 @@ def _result_to_chart_df(result) -> pd.DataFrame:
 
 def chart_result(
     result,
-    chart_class: BaseChart,
+    chart_type_name: str,
     output_path: Path | str | None = None,
     **setting_overrides,
 ) -> Figure:
@@ -154,8 +172,8 @@ def chart_result(
     ----------
     result : MetricResult
         Result to chart
-    chart_class : BaseChart
-        Chart class to use for rendering
+    chart_type_name : str
+        Name of registered chart type to use
     output_path : Path | str | None
         Path to save the chart
     **setting_overrides
@@ -170,16 +188,18 @@ def chart_result(
     --------
     ```python
     result = store["my_metric", "compliance_rate"]
-    fig = chart_result(result, RateChart(), y_label="Custom Label")
+    fig = chart_result(result, "compliance_rate", y_label="Custom Label")
     ```
     """
+    chart_type_obj = get_chart_type(chart_type_name)
     df = _result_to_chart_df(result)
 
-    return create_chart_from_chart_class(
+    settings = chart_type_obj.get_settings(**setting_overrides)
+
+    return create_chart(
         df=df,
         method_name=result.method,
-        chart_class=chart_class,
-        metric_name=result.metric,
+        chart_type=chart_type_obj.chart_style,
+        settings=settings,
         output_path=output_path,
-        **setting_overrides,
     )
