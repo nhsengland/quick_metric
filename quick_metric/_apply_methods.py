@@ -46,8 +46,8 @@ print(results)  # {'count_rows': 3, 'sum_column': 6}
 import hashlib
 from typing import Any, Callable, Optional
 
+import dask.dataframe as dd
 from loguru import logger
-import pandas as pd
 
 from quick_metric.exceptions import (
     MetricsMethodNotFoundError,
@@ -58,7 +58,7 @@ from quick_metric.store import MetricsStore
 
 
 def apply_method(
-    data: pd.DataFrame,
+    data: dd.DataFrame,
     method_spec: str | dict,
     metrics_methods: Optional[dict[str, Callable]] = None,
 ) -> tuple[str, Any]:
@@ -145,7 +145,7 @@ def apply_method(
 
 
 def apply_methods(
-    data: pd.DataFrame,
+    data: dd.DataFrame,
     method_specs: list[str | dict],
     metrics_methods: Optional[dict[str, Callable]] = None,
     store: Optional[MetricsStore] = None,

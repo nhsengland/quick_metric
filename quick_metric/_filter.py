@@ -58,17 +58,17 @@ apply_methods : Module that processes filtered data
 
 from typing import Any, Union
 
+import dask.dataframe as dd
 from loguru import logger
-import pandas as pd
 
 
-def evaluate_condition(data_df: pd.DataFrame, column: str, value: Union[dict, Any]) -> pd.Series:
+def evaluate_condition(data_df: dd.DataFrame, column: str, value: Union[dict, Any]) -> dd.Series:
     """
     Evaluate a condition based on the provided column and value.
 
     Parameters
     ----------
-    data_df : pd.DataFrame
+    data_df : dd.DataFrame
         The DataFrame to be filtered.
     column : str
         The column name to be filtered.
@@ -77,7 +77,7 @@ def evaluate_condition(data_df: pd.DataFrame, column: str, value: Union[dict, An
 
     Returns
     -------
-    pd.Series
+    dd.Series
         Boolean filter mask indicating whether the condition is met
         for each row in the DataFrame.
 
@@ -113,16 +113,19 @@ def evaluate_condition(data_df: pd.DataFrame, column: str, value: Union[dict, An
             return data_df[column].isin(value)
         return data_df[column] == value
     # Return a boolean mask with all False values
-    return pd.Series(index=data_df.index, data=False, dtype=bool)
+    return dd.from_pandas(
+        dd.utils.make_meta({data_df.index.name or "index": "int64"}),
+        npartitions=data_df.npartitions,
+    ).map_partitions(lambda x: x.assign(mask=False)["mask"], meta=("mask", "bool"))
 
 
-def recursive_filter(data_df: pd.DataFrame, filters: dict) -> pd.Series:
+def recursive_filter(data_df: dd.DataFrame, filters: dict) -> dd.Series:
     """
     Recursively applies filters to a DataFrame and returns a boolean mask.
 
     Parameters
     ----------
-    data_df : pd.DataFrame
+    data_df : dd.DataFrame
         The DataFrame to filter.
     filters : dict
         A dictionary specifying the filters to apply. The dictionary can
@@ -131,7 +134,7 @@ def recursive_filter(data_df: pd.DataFrame, filters: dict) -> pd.Series:
 
     Returns
     -------
-    pd.Series
+    dd.Series
         A boolean filter mask indicating which rows of the DataFrame match
         the filters.
 
@@ -149,10 +152,10 @@ def recursive_filter(data_df: pd.DataFrame, filters: dict) -> pd.Series:
     """
     # Handle empty filters - return all rows as True
     if not filters:
-        return pd.Series(index=data_df.index, data=True, dtype=bool)
+        return data_df.index.to_series().map_partitions(lambda x: x.notna(), meta=("index", "bool"))
 
     if "and" in filters:
-        mask = pd.Series(index=data_df.index, data=True, dtype=bool)
+        mask = data_df.index.to_series().map_partitions(lambda x: x.notna(), meta=("mask", "bool"))
         for key, value in filters["and"].items():
             if key in ["and", "or", "not"]:
                 mask &= recursive_filter(data_df, {key: value})
@@ -162,7 +165,7 @@ def recursive_filter(data_df: pd.DataFrame, filters: dict) -> pd.Series:
                     mask &= condition_result
         return mask
     if "or" in filters:
-        mask = pd.Series(index=data_df.index, data=False, dtype=bool)
+        mask = data_df.index.to_series().map_partitions(lambda x: x * False, meta=("mask", "bool"))
         or_conditions = filters["or"]
 
         # Handle both list and dict format for or conditions
@@ -186,30 +189,30 @@ def recursive_filter(data_df: pd.DataFrame, filters: dict) -> pd.Series:
     return evaluate_condition(data_df, list(filters.keys())[0], list(filters.values())[0])
 
 
-def apply_filter(data_df: pd.DataFrame, filters: dict) -> pd.DataFrame:
+def apply_filter(data_df: dd.DataFrame, filters: dict) -> dd.DataFrame:
     """
     Apply filters to the DataFrame based on the provided dictionary.
 
     Parameters
     ----------
-    data_df : pd.DataFrame
+    data_df : dd.DataFrame
         The DataFrame to be filtered.
     filters : dict
         Dictionary containing the filter conditions.
 
     Returns
     -------
-    pd.DataFrame
+    dd.DataFrame
         Filtered DataFrame.
     """
-    logger.trace(f"Applying filters to DataFrame with {len(data_df)} rows")
+    logger.trace(f"Applying filters to DataFrame with {data_df.npartitions} partitions")
 
     if not filters:
         logger.trace("No filters specified, returning original DataFrame")
         return data_df
 
     mask = recursive_filter(data_df, filters)
-    filtered_df = data_df.loc[mask]  # type: ignore[return-value]
+    filtered_df = data_df[mask]
 
-    logger.trace(f"Filter applied: {len(filtered_df)} rows remaining")
+    logger.trace(f"Filter applied: {filtered_df.npartitions} partitions remaining")
     return filtered_df

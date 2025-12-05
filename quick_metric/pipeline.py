@@ -40,10 +40,10 @@ stage = create_metrics_stage(
 from pathlib import Path
 from typing import Optional
 
+import dask.dataframe as dd
 from loguru import logger
 from oops_its_a_pipeline import PipelineStage
 from oops_its_a_pipeline.exceptions import PipelineStageValidationError
-import pandas as pd
 
 from quick_metric.core import generate_metrics
 
@@ -63,7 +63,7 @@ class GenerateMetricsStage(PipelineStage):
     Parameters
     ----------
     data_input : str, default "data"
-        Name of the context variable containing the pandas DataFrame.
+        Name of the context variable containing the dask DataFrame.
         The DataFrame should contain the data to be analyzed.
     config_input : str, default "config"
         Name of the context variable containing the metrics configuration.
@@ -93,7 +93,7 @@ class GenerateMetricsStage(PipelineStage):
     Raises
     ------
     PipelineStageValidationError
-        If input data is not a pandas DataFrame, if configuration is invalid,
+        If input data is not a dask DataFrame, if configuration is invalid,
         or if metrics generation fails for any reason.
 
     Notes
@@ -247,9 +247,9 @@ class GenerateMetricsStage(PipelineStage):
                     raise ValueError(error_msg)
 
             # Validate data input
-            if not isinstance(data, pd.DataFrame):
+            if not isinstance(data, dd.DataFrame):
                 raise PipelineStageValidationError(
-                    f"Stage '{self.name}': Expected pandas DataFrame for "
+                    f"Stage '{self.name}': Expected dask DataFrame for "
                     f"'{self.data_input}', got {type(data)}"
                 )
 
@@ -258,7 +258,7 @@ class GenerateMetricsStage(PipelineStage):
             if self.metrics_methods_input:
                 metrics_methods = context.get(self.metrics_methods_input)
 
-            logger.info(f"Generating metrics for DataFrame with {len(data)} rows")
+            logger.info("Generating metrics for DataFrame")
 
             # Generate metrics using the core function
             results = generate_metrics(data=data, config=config, metrics_methods=metrics_methods)
@@ -301,7 +301,7 @@ def create_metrics_stage(
     Parameters
     ----------
     data_input : str, default "data"
-        Name of the context variable containing the pandas DataFrame.
+        Name of the context variable containing the dask DataFrame.
         This should reference a variable in the pipeline context that
         contains the data to be analyzed.
     config_input : str, default "config"
